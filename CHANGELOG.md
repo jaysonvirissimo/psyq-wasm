@@ -9,6 +9,27 @@ changes, because they can alter emitted assembly.
 
 ## [Unreleased]
 
+### Fixed
+
+- Snapshot Node `Buffer` inputs without aliasing or detaching caller storage.
+- Prevent immediate cancellation/disposal and stale timers from disrupting queued work.
+- Report worker construction, posting, and Wasm instantiation failures promptly through typed errors.
+- Load Node file URLs using native filesystem handling, including Windows paths.
+- Reject timeout values above 2,147,483,647 milliseconds instead of overflowing timers.
+
+### Compiler build
+
+- Pin Emscripten 6.0.9 by digest and use the canonical `linux/amd64` platform.
+- Recompile all objects in a fresh directory and reapply compatibility patches on every build.
+- Ship verifiable source exports that rebuild without Git metadata or another checkout.
+- Verify fresh reference fixtures without overwriting expectations; compare source-archive rebuild hashes before publication.
+- Exclude Git metadata from the historical build's source copy.
+
+### Tests
+
+- Add cancellation, buffer ownership, failure propagation, timer, and archive verification regressions.
+- Exercise Node 20/22/24 on Linux and Node 24 on macOS/Windows, including packed-package consumers.
+
 ## [0.1.0] - 2026-09-07
 
 ### Added

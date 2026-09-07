@@ -19,11 +19,23 @@ npm run test:node      # Node API + differential tests against dist/
 npx playwright install # once
 npm run test:browser   # Chromium, Firefox, WebKit
 npm run test:package   # npm pack + consumer apps (needs network)
+build/check-gen.sh --fresh # independently regenerate historical build inputs
+build/compile-fixtures.sh --verify # compare fixtures with an existing reference build
 npm run serve          # http://127.0.0.1:4173/demo/
 ```
 
 Unit tests never need the compiler artifact. The Node and browser suites do,
 and they fail (never skip) when `dist/` is missing.
+
+Development tooling runs on Node 24, TypeScript 6.0, and Vitest 4.1. Keep the
+`.npmrc` legacy-peer workaround for local npm 11 installs; `npm ci` is the
+standard clean-install path. Compiler builds use Docker exclusively, with
+Emscripten 6.0.9 pinned by digest and `linux/amd64` selected on every host.
+Each build compiles fresh objects; only Emscripten system libraries are cached.
+
+CI exercises Node 20, 22, and 24 on Linux and Node 24 on macOS and Windows.
+The Node package consumer installs into a path containing spaces and `#` to
+exercise native file URL handling.
 
 ## Test layers
 
@@ -94,8 +106,24 @@ an SDK, or another decompilation project. To add one:
 
 ## Releases
 
-Tag `vX.Y.Z` on `main`. The release workflow rebuilds the compiler twice and
-requires identical hashes, regenerates and checks the generated sources, runs
-every test layer, verifies `PROVENANCE.md`, publishes to npm with provenance,
-and attaches the artifacts plus the corresponding-source archive to a GitHub
-release.
+Tag `vX.Y.Z` on `main`. The release workflow builds the compiler, freshly builds
+the historical reference, verifies generated sources and fixtures without
+rewriting them, runs every test layer, and verifies `PROVENANCE.md`. It then
+builds the corresponding-source archive in two independent clean directories
+and requires both Wasm and glue hashes to match before publishing.
+
+To rehearse the archive checks locally after building:
+
+```sh
+scripts/pack-source-archive.sh
+scripts/verify-source-archive.sh build/out/release/psyq-wasm-0.1.0-corresponding-source.tar.gz dist/SHA256SUMS --twice
+```
+
+The archive includes the current checkout's build inputs and the pinned vendor
+export. After extraction, run `build/build-wasm.sh --offline-source` inside its
+`psyq-wasm/` directory. The command verifies bundled checksums and pins and
+does not need Git or npm; Docker may download its pinned image if not cached.
+
+Publishing requires `NPM_TOKEN` or configured npm trusted publishing. The demo
+workflow requires GitHub Pages to be enabled. These are repository/account
+settings, not prerequisites for local validation.

@@ -2,13 +2,19 @@
 # SPDX-License-Identifier: MIT
 # Verify that build/gen/ matches a fresh regeneration from the pinned sources.
 #
-#   build/check-gen.sh [RESULT_DIR]
+#   build/check-gen.sh [--fresh] [RESULT_DIR]
 #
 # If RESULT_DIR (default build/out/reference) has no gen/ directory yet, the
 # reference build is run first.
 source "$(dirname "$0")/lib.sh"
 
-RESULT_DIR="${1:-$OUT_DIR/reference}"
+if [[ "${1:-}" == "--fresh" ]]; then
+  mkdir -p "$OUT_DIR"
+  RESULT_DIR="$(mktemp -d "$OUT_DIR/reference.XXXXXX")"
+  trap 'rm -rf "$RESULT_DIR"' EXIT
+else
+  RESULT_DIR="${1:-$OUT_DIR/reference}"
+fi
 if [[ ! -d "$RESULT_DIR/gen" ]]; then
   "$ROOT/build/build-reference.sh" "$RESULT_DIR"
 fi

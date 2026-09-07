@@ -39,3 +39,8 @@ cc1psx -quiet -O2 -G 0 -g0 -Wall NAME.i -o expected/g0/NAME.s 2> expected/g0/NAM
 The `.i` files begin with a `# 1 "NAME.c"` line marker, which is why the `.file`
 directive and any diagnostics in the reference output name the `.c` file rather
 than the `.i` file handed to the compiler. Empty `.err` files are not committed.
+
+`build/compile-fixtures.sh --verify` regenerates into a temporary directory and
+compares inputs, assembly, stderr, exit status, and `SHA256SUMS` with the
+committed files without writing anything here; the release workflow runs it
+against a freshly built reference compiler.

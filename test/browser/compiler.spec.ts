@@ -89,6 +89,36 @@ async function compileFixture(
 }
 
 test.describe('psyq-wasm in the browser', () => {
+  test('immediate cancellation preserves queued work without unhandled errors', async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await openHarness(page);
+    await createCompiler(page);
+    const outcome = await page.evaluate(async () => {
+      const w = window as unknown as {
+        compiler: {
+          compilePreprocessed: (
+            source: Uint8Array,
+            options: unknown,
+          ) => Promise<{ success: boolean }>;
+        };
+      };
+      const source = new TextEncoder().encode('int answer(void) { return 42; }\n');
+      const abort = new AbortController();
+      const cancelled = w.compiler
+        .compilePreprocessed(source, { gpSize: 8, signal: abort.signal, timeoutMs: 1 })
+        .catch((error: unknown) =>
+          error instanceof DOMException ? error.name : 'unexpected error',
+        );
+      abort.abort();
+      const result = await w.compiler.compilePreprocessed(source, { gpSize: 0 });
+      return { cancelled: await cancelled, success: result.success };
+    });
+    expect(outcome).toEqual({ cancelled: 'AbortError', success: true });
+    expect(errors).toEqual([]);
+  });
   test('initializes from package-relative assets and reports the compiler identity', async ({
     page,
   }) => {

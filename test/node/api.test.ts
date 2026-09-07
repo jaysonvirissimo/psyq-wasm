@@ -4,6 +4,7 @@
  * artifact in dist/. Requires `npm run build`.
  */
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generate } from '../../scripts/gen-stress-fixture.mjs';
 import type * as Api from '../../src/index.node.js';
@@ -12,7 +13,7 @@ import { fromRoot } from '../helpers/paths.js';
 
 type NodeApi = typeof Api;
 
-const api = (await import(fromRoot('dist', 'index.node.js'))) as NodeApi;
+const api = (await import(pathToFileURL(fromRoot('dist', 'index.node.js')).href)) as NodeApi;
 const buildInfo = JSON.parse(readFileSync(fromRoot('dist', 'build-info.json'), 'utf8')) as {
   buildId: string;
 };
@@ -28,6 +29,50 @@ describe('createCompiler (Node)', () => {
 
   afterAll(() => {
     compiler.dispose();
+  });
+
+  it.each(['pooled', 'standalone', 'subarray'] as const)(
+    'compiles %s Buffer input without detaching or aliasing it',
+    async (kind) => {
+      const bytes = readFixture('src/t01_arith.i');
+      const buffer = kind === 'pooled' ? Buffer.from(bytes) : Buffer.alloc(bytes.length + 2);
+      const source =
+        kind === 'subarray'
+          ? buffer.subarray(1, bytes.length + 1)
+          : buffer.subarray(0, bytes.length);
+      source.set(bytes);
+      const first = compiler.compilePreprocessed(bytes, { gpSize: 8, rawFlags: FLAGS });
+      const pending = compiler.compilePreprocessed(source, { gpSize: 8, rawFlags: FLAGS });
+      source.fill(0);
+      await first;
+      const result = await pending;
+      expect(source.byteLength).toBe(bytes.length);
+      expect(source.every((byte) => byte === 0)).toBe(true);
+      expect(result.success).toBe(true);
+      expect(
+        Buffer.compare(result.asm ?? new Uint8Array(), readFixture('expected/g8/t01_arith.s')),
+      ).toBe(0);
+    },
+  );
+
+  it('preserves a queued compile after immediate cancellation', async () => {
+    const abort = new AbortController();
+    const first = compiler.compilePreprocessed(STRESS, {
+      gpSize: 8,
+      signal: abort.signal,
+      timeoutMs: 1,
+    });
+    const rejected = expect(first).rejects.toSatisfy(api.isAbortError);
+    abort.abort();
+    const result = await compiler.compilePreprocessed(readFixture('src/t02_shift.i'), {
+      gpSize: 0,
+      rawFlags: FLAGS,
+    });
+    await rejected;
+    expect(result.success).toBe(true);
+    expect(
+      Buffer.compare(result.asm ?? new Uint8Array(), readFixture('expected/g0/t02_shift.s')),
+    ).toBe(0);
   });
 
   it('reports the compiler identity from the built artifact', () => {

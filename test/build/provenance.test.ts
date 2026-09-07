@@ -45,6 +45,7 @@ describe('verify-provenance', () => {
       pins: stale,
       buildInfo: {
         emsdkImage: 'emscripten/emsdk:6.0.9',
+        emsdkPlatform: pins.get('EMSDK_PLATFORM') ?? '',
         homebrewPsyqSha: pins.get('HOMEBREW_PSYQ_SHA') ?? '',
         gccTreeSha: pins.get('GCC_TREE_SHA') ?? '',
         cflags: pins.get('CC1_WASM_CFLAGS') ?? '',

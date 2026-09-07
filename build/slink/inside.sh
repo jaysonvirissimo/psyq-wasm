@@ -26,7 +26,8 @@ autoconf --version | head -1
 
 # --- source on tmpfs ----------------------------------------------------------
 # glibc 2.0's getcwd() fails on Docker bind mounts, which breaks configure.
-mkdir -p /work && cp -a /mount /work/src
+mkdir -p /work/src && cp -a "/mount/$GCC_SUBDIR" /work/src/
+cp /mount/VERSION /work/src/VERSION
 SRC=/work/src/$GCC_SUBDIR/gcc
 BUILD=/work/build
 mkdir -p "$BUILD"

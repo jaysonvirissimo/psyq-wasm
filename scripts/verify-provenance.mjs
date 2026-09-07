@@ -8,7 +8,7 @@
  * With --tag, also requires package.json's version to match the tag.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -16,6 +16,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
  * @typedef {object} BuildInfo
  * @property {string} [buildId]
  * @property {string} [wasmSha256]
+ * @property {string} [emsdkPlatform]
  * @property {string} [emsdkImage]
  * @property {string} [homebrewPsyqSha]
  * @property {string} [gccTreeSha]
@@ -71,6 +72,7 @@ export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
     'GCC_TREE_SHA',
     'SLINK_IMAGE',
     'EMSDK_IMAGE',
+    'EMSDK_PLATFORM',
     'CC1_WASM_CFLAGS',
     'CC1_WASM_LDFLAGS',
     'CC1_VERSION_BANNER',
@@ -87,6 +89,7 @@ export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
       }
     };
     expect('emsdkImage', 'EMSDK_IMAGE');
+    expect('emsdkPlatform', 'EMSDK_PLATFORM');
     expect('homebrewPsyqSha', 'HOMEBREW_PSYQ_SHA');
     expect('gccTreeSha', 'GCC_TREE_SHA');
     expect('cflags', 'CC1_WASM_CFLAGS');
@@ -104,7 +107,7 @@ export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
 const invokedDirectly =
   typeof process !== 'undefined' &&
   process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+  import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   const tagIndex = process.argv.indexOf('--tag');

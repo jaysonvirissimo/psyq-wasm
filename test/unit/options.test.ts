@@ -14,6 +14,23 @@ import {
 const limits = DEFAULT_LIMITS;
 
 describe('validateCompileOptions', () => {
+  it.each([1, 2_147_483_647])('accepts timer boundary %s', (timeoutMs) => {
+    expect(validateCompileOptions({ gpSize: 8, timeoutMs }, limits).timeoutMs).toBe(timeoutMs);
+    expect(
+      resolveLimits({ defaultTimeoutMs: timeoutMs, initTimeoutMs: timeoutMs }).initTimeoutMs,
+    ).toBe(timeoutMs);
+  });
+
+  it.each([2_147_483_648, Number.MAX_SAFE_INTEGER])(
+    'rejects overflowing timer %s at every boundary',
+    (timeoutMs) => {
+      expect(() => validateCompileOptions({ gpSize: 8, timeoutMs }, limits)).toThrow(
+        InvalidOptionsError,
+      );
+      expect(() => resolveLimits({ defaultTimeoutMs: timeoutMs })).toThrow(InvalidOptionsError);
+      expect(() => resolveLimits({ initTimeoutMs: timeoutMs })).toThrow(InvalidOptionsError);
+    },
+  );
   it('normalizes a minimal valid request', () => {
     const normalized = validateCompileOptions({ gpSize: 8 }, limits);
     expect(normalized).toEqual({

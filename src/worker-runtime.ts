@@ -67,22 +67,34 @@ export function createWorkerRuntime(deps: WorkerRuntimeDeps): WorkerRuntime {
 
     // A fresh instance per compile: GCC 2.8.1 keeps global state and the
     // runtime exits after main() returns.
-    const cc1 = await deps.createModule({
-      instantiateWasm: (imports, receive) => {
-        void instantiate(module, imports).then((instance) => {
-          receive(instance, module);
-        });
-        return {};
-      },
-      print: stdout.push,
-      printErr: stderr.push,
-      preRun: [
-        (m) => {
-          // cc1psx creates two temporary files via mktemp().
-          m.ENV['TMPDIR'] = '/tmp';
-        },
-      ],
+    let failInstantiation!: (error: unknown) => void;
+    const failed = new Promise<never>((_resolve, reject) => {
+      failInstantiation = reject;
     });
+    // Observe failure even if the factory throws synchronously before the race.
+    void failed.catch(() => undefined);
+    const cc1 = await Promise.race([
+      failed,
+      deps.createModule({
+        instantiateWasm: (imports, receive) => {
+          void Promise.resolve()
+            .then(() => instantiate(module, imports))
+            .then((instance) => {
+              receive(instance, module);
+            })
+            .catch(failInstantiation);
+          return {};
+        },
+        print: stdout.push,
+        printErr: stderr.push,
+        preRun: [
+          (m) => {
+            // cc1psx creates two temporary files via mktemp().
+            m.ENV['TMPDIR'] = '/tmp';
+          },
+        ],
+      }),
+    ]);
     cc1.FS.mkdir(WORK_DIR);
     cc1.FS.chdir(WORK_DIR);
     cc1.FS.writeFile(`${WORK_DIR}/${request.filename}`, request.source);

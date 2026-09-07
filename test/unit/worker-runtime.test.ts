@@ -82,6 +82,32 @@ function clock(...ticks: number[]): () => number {
 }
 
 describe('createWorkerRuntime', () => {
+  it.each(['reject', 'throw', 'receive'] as const)(
+    'reports an instantiation %s without leaving the request pending',
+    async (failure) => {
+      const runtime = createWorkerRuntime({
+        buildId: BUILD_ID,
+        instantiate: (module, imports) => {
+          if (failure === 'throw') throw new Error('instantiate failed');
+          return failure === 'reject'
+            ? Promise.reject(new Error('instantiate failed'))
+            : WebAssembly.instantiate(module, imports);
+        },
+        createModule: (options) =>
+          new Promise(() => {
+            options?.instantiateWasm?.({}, () => {
+              throw new Error('receive failed');
+            });
+          }),
+      });
+      await runtime.handle({ type: 'init', module: EMPTY_MODULE });
+      await expect(runtime.handle(compileMessage())).resolves.toEqual({
+        type: 'crash',
+        id: 7,
+        message: failure === 'receive' ? 'Error: receive failed' : 'Error: instantiate failed',
+      });
+    },
+  );
   it('answers init with ready and the build id', async () => {
     const runtime = createWorkerRuntime({
       createModule: fakeCc1(() => 0).factory,

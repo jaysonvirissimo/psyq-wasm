@@ -17,7 +17,8 @@ describe('build/pins.env', () => {
     ['SLINK_IMAGE', OCI_DIGEST],
     ['SLINK_PLATFORM', /^linux\/386$/],
     ['SLINK_PACKAGES', /\bgcc\b.*\bbison\b.*\bgperf\b/],
-    ['EMSDK_IMAGE', /^emscripten\/emsdk:\d+\.\d+\.\d+$/],
+    ['EMSDK_IMAGE', OCI_DIGEST],
+    ['EMSDK_PLATFORM', /^linux\/amd64$/],
     ['TARGET_NAME', /^mips-psx$/],
     [
       'CC1_VERSION_BANNER',

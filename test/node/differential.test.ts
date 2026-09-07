@@ -3,12 +3,13 @@
  * Differential compiler tests: every fixture in the manifest must reproduce the
  * reference compiler's output byte for byte, and its stderr exactly.
  */
+import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type * as Api from '../../src/index.node.js';
 import { loadManifest, readFixture, readFixtureText } from '../helpers/fixtures.js';
 import { fromRoot } from '../helpers/paths.js';
 
-const api = (await import(fromRoot('dist', 'index.node.js'))) as typeof Api;
+const api = (await import(pathToFileURL(fromRoot('dist', 'index.node.js')).href)) as typeof Api;
 const { fixtures } = loadManifest();
 
 /** Describe the first differing byte with some context, for readable failures. */

@@ -11,7 +11,7 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -25,7 +25,12 @@ function step(name) {
 
 function run(cmd, args, cwd) {
   console.log(`$ ${cmd} ${args.join(' ')}`);
-  return execFileSync(cmd, args, {
+  // npm.cmd cannot be executed directly on Windows. Invoke npm's JS entry
+  // with the current Node executable, preserving arguments without a shell.
+  const npmCli =
+    process.env.npm_execpath ?? join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+  const useNpmCli = cmd === 'npm' && existsSync(npmCli);
+  return execFileSync(useNpmCli ? process.execPath : cmd, useNpmCli ? [npmCli, ...args] : args, {
     cwd,
     stdio: ['ignore', 'pipe', 'inherit'],
     encoding: 'utf8',
@@ -89,7 +94,7 @@ assert(!files.some((f) => f.startsWith('test/')), 'tarball has no test/');
 
 // ---------------------------------------------------------------------------
 step('node consumer app');
-const nodeApp = join(OUT, 'node-app');
+const nodeApp = join(OUT, 'node app #encoded');
 cpSync(join(HERE, 'node-app'), nodeApp, { recursive: true });
 writeFileSync(
   join(nodeApp, 'package.json'),

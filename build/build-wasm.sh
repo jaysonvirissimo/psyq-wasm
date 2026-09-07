@@ -4,17 +4,26 @@
 # Emscripten image.
 #
 #   build/build-wasm.sh            # host side: fetch vendor, run the emsdk container
+#   build/build-wasm.sh --offline-source # verify bundled sources without Git/network
 #   build/build-wasm.sh --inside   # container side (invoked by the above)
 #
 # Outputs (all in dist/): cc1psx.wasm, cc1psx.js, build-info.json, SHA256SUMS.
 source "$(dirname "$0")/lib.sh"
 
+case "${1:-}" in
+  ""|--inside|--offline-source) ;;
+  *) die "usage: build/build-wasm.sh [--offline-source]" ;;
+esac
 if [[ "${1:-}" != "--inside" ]]; then
   need docker
-  "$ROOT/build/fetch-vendor.sh"
+  if [[ "${1:-}" == "--offline-source" ]]; then
+    "$ROOT/build/verify-source.sh"
+  else
+    "$ROOT/build/fetch-vendor.sh"
+  fi
   mkdir -p "$OUT_DIR/emcache" "$DIST_DIR"
   log "building in $EMSDK_IMAGE"
-  exec docker run --rm \
+  exec docker run --rm --network none --platform "$EMSDK_PLATFORM" \
     -u "$(id -u):$(id -g)" \
     -v "$ROOT:/src" -w /src \
     -e HOME=/tmp \
@@ -23,8 +32,13 @@ fi
 
 # ---------------------------------------------------------------- inside ----
 need emcc
-OBJ_DIR="$OUT_DIR/obj"
-PATCHED_DIR="$OUT_DIR/patched"
+mkdir -p "$OUT_DIR"
+# Every invocation compiles fresh objects and reapplies the compatibility patch.
+# A timestamp cache cannot account for all headers, flags, and toolchain inputs.
+WORK_DIR="$(mktemp -d "$OUT_DIR/wasm.XXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT
+OBJ_DIR="$WORK_DIR/obj"
+PATCHED_DIR="$WORK_DIR/patched"
 # Emscripten's system-library cache lives in the repository so it survives
 # container restarts (the image's own config ignores EM_CACHE).
 CACHE_DIR="$OUT_DIR/emcache"
@@ -36,10 +50,8 @@ log "emcc: $(emcc --version | head -1)"
 # copy is pre-included on every compile, and its include guard makes the later
 # `#include "obstack.h"` from the source tree a no-op.
 PATCH_FILE="$ROOT/build/patches/obstack.h.diff"
-if [[ ! -f "$PATCHED_DIR/obstack.h" || "$GCC_DIR/obstack.h" -nt "$PATCHED_DIR/obstack.h" || "$PATCH_FILE" -nt "$PATCHED_DIR/obstack.h" ]]; then
-  cp "$GCC_DIR/obstack.h" "$PATCHED_DIR/obstack.h"
-  patch --silent "$PATCHED_DIR/obstack.h" "$PATCH_FILE" || die "obstack.h.diff did not apply cleanly"
-fi
+cp "$GCC_DIR/obstack.h" "$PATCHED_DIR/obstack.h"
+patch --silent "$PATCHED_DIR/obstack.h" "$PATCH_FILE" || die "obstack.h.diff did not apply cleanly"
 
 # shellcheck disable=SC2206
 CFLAGS=($CC1_WASM_CFLAGS --cache="$CACHE_DIR" -I"$GEN_DIR" -I"$GCC_DIR" -I"$GCC_DIR/config" -include "$PATCHED_DIR/obstack.h")
@@ -60,10 +72,8 @@ while IFS= read -r obj; do
   esac
   [[ -f "$src" ]] || die "missing source for $obj: $src"
   out="$OBJ_DIR/$obj"
-  if [[ ! -f "$out" || "$src" -nt "$out" || "$PATCHED_DIR/obstack.h" -nt "$out" ]]; then
-    log "cc $base"
-    emcc "${CFLAGS[@]}" "${extra[@]}" -c "$src" -o "$out"
-  fi
+  log "cc $base"
+  emcc "${CFLAGS[@]}" "${extra[@]}" -c "$src" -o "$out"
   objects+=("$out")
 done <"$ROOT/build/objs.txt"
 
@@ -90,6 +100,7 @@ cat >"$DIST_DIR/build-info.json" <<EOF
   "gccVersion": "2.8.1",
   "target": "${TARGET_NAME:?}",
   "emsdkImage": "$EMSDK_IMAGE",
+  "emsdkPlatform": "$EMSDK_PLATFORM",
   "emsdkVersion": "$emsdk_version",
   "homebrewPsyqRepo": "$HOMEBREW_PSYQ_REPO",
   "homebrewPsyqSha": "$HOMEBREW_PSYQ_SHA",

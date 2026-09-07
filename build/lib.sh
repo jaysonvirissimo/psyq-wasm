@@ -29,7 +29,7 @@ set -a
 set +a
 
 : "${HOMEBREW_PSYQ_REPO:?}" "${HOMEBREW_PSYQ_SHA:?}" "${GCC_SUBDIR:?}" "${GCC_TREE_SHA:?}"
-: "${SLINK_IMAGE:?}" "${SLINK_PLATFORM:?}" "${EMSDK_IMAGE:?}" "${CC1_WASM_CFLAGS:?}" "${CC1_WASM_LDFLAGS:?}"
+: "${SLINK_IMAGE:?}" "${SLINK_PLATFORM:?}" "${EMSDK_IMAGE:?}" "${EMSDK_PLATFORM:?}" "${CC1_WASM_CFLAGS:?}" "${CC1_WASM_LDFLAGS:?}"
 
 VENDOR_DIR="$ROOT/build/vendor/homebrew-psyq"
 GCC_DIR="$VENDOR_DIR/$GCC_SUBDIR/gcc"
@@ -44,4 +44,17 @@ sha256_file() {
   else
     shasum -a 256 "$1" | cut -d' ' -f1
   fi
+}
+
+# Sorted, complete inventory of exported source files; no Git metadata needed.
+source_checksums() {
+  (
+    cd "$VENDOR_DIR"
+    [[ -z "$(find . -type l -print)" ]] || die "exported sources must not contain symlinks"
+    hash_command=(shasum -a 256)
+    if command -v sha256sum >/dev/null 2>&1; then hash_command=(sha256sum); fi
+    find . -type f -print | LC_ALL=C sort | while IFS= read -r name; do
+      printf '%s\0' "$name"
+    done | xargs -0 "${hash_command[@]}"
+  )
 }

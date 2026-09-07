@@ -13,6 +13,8 @@ need docker
 RESULT_DIR="${1:-$OUT_DIR/reference}"
 "$ROOT/build/fetch-vendor.sh"
 mkdir -p "$RESULT_DIR"
+# Docker bind mounts need absolute host paths.
+RESULT_DIR="$(cd "$RESULT_DIR" && pwd)"
 
 log "reference build in $SLINK_IMAGE ($SLINK_PLATFORM) -> $RESULT_DIR"
 docker run --rm -i \

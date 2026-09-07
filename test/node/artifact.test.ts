@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fromRoot } from '../helpers/paths.js';
 import { loadPins } from '../helpers/pins.js';
@@ -11,6 +12,7 @@ interface BuildInfo {
   wasmSha256: string;
   glueSha256: string;
   emsdkImage: string;
+  emsdkPlatform: string;
   homebrewPsyqSha: string;
   gccTreeSha: string;
   cflags: string;
@@ -43,7 +45,7 @@ describe('dist/cc1psx.wasm', () => {
 
 describe('dist/cc1psx.js', () => {
   it('is an ES module exporting the factory and BUILD_ID', async () => {
-    const mod = (await import(fromRoot('dist', 'cc1psx.js'))) as {
+    const mod = (await import(pathToFileURL(fromRoot('dist', 'cc1psx.js')).href)) as {
       default: unknown;
       BUILD_ID: unknown;
     };
@@ -62,6 +64,7 @@ describe('dist/build-info.json', () => {
 
   it('records the pinned inputs', () => {
     expect(info.emsdkImage).toBe(pins.get('EMSDK_IMAGE'));
+    expect(info.emsdkPlatform).toBe(pins.get('EMSDK_PLATFORM'));
     expect(info.homebrewPsyqSha).toBe(pins.get('HOMEBREW_PSYQ_SHA'));
     expect(info.gccTreeSha).toBe(pins.get('GCC_TREE_SHA'));
     expect(info.cflags).toBe(pins.get('CC1_WASM_CFLAGS'));

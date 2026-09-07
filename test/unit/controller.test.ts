@@ -61,6 +61,40 @@ afterEach(() => {
 });
 
 describe('CompilerController.start', () => {
+  it('normalizes a synchronous construction failure', async () => {
+    const error = new Error('constructor failed');
+    const controller = new CompilerController({
+      module: EMPTY_MODULE,
+      limits: DEFAULT_LIMITS,
+      spawnWorker: () => {
+        throw error;
+      },
+    });
+    await expect(controller.start()).rejects.toMatchObject({ code: 'worker-crash', cause: error });
+    expect(vi.getTimerCount()).toBe(0);
+    controller.dispose();
+  });
+
+  it.each(['postMessage', 'onMessage'] as const)(
+    'cleans up when initialization %s throws',
+    async (method) => {
+      const { spawn, workers } = fakeWorkerFactory();
+      const controller = new CompilerController({
+        module: EMPTY_MODULE,
+        limits: DEFAULT_LIMITS,
+        spawnWorker: () => {
+          const w = spawn();
+          vi.spyOn(w, method).mockImplementation(() => {
+            throw new Error('init failed');
+          });
+          return w;
+        },
+      });
+      await expect(controller.start()).rejects.toBeInstanceOf(WorkerCrashError);
+      expect(workers[0]?.terminated).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
   it('spawns one worker, posts init with the retained module, and reports the build id', async () => {
     const h = await harness();
     expect(h.spawn).toHaveBeenCalledTimes(1);
@@ -134,6 +168,75 @@ describe('CompilerController.start', () => {
 });
 
 describe('CompilerController.compile', () => {
+  it('ignores a timeout callback already queued when its request settles', async () => {
+    const h = await harness();
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const pending = h.controller.compile(SOURCE, { gpSize: 8, timeoutMs: 123 });
+    await flush();
+    const callback = timers.mock.calls.find((call) => call[1] === 123)?.[0];
+    h.worker().result(1);
+    await pending;
+    if (typeof callback !== 'function') throw new Error('missing timer callback');
+    callback();
+    expect(h.worker().terminated).toBe(false);
+    h.controller.dispose();
+    timers.mockRestore();
+  });
+  it('recovers queued work after posting a compile throws', async () => {
+    const h = await harness();
+    vi.spyOn(h.worker(), 'postMessage').mockImplementation(() => {
+      throw new Error('transfer failed');
+    });
+    const first = settled(h.controller.compile(SOURCE, { gpSize: 8 }));
+    const next = h.controller.compile(SOURCE, { gpSize: 8 });
+    await flush();
+    await expect(first).rejects.toMatchObject({
+      code: 'worker-crash',
+      message: 'could not post compile: transfer failed',
+    });
+    h.worker().ready();
+    await flush();
+    h.worker().result(2);
+    await expect(next).resolves.toMatchObject({ success: true });
+    h.controller.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('can retry after idle replacement construction throws', async () => {
+    const h = await harness();
+    h.spawn.mockImplementationOnce(() => {
+      throw new Error('spawn failed');
+    });
+    h.worker().crash('replace');
+    await flush();
+    const next = h.controller.compile(SOURCE, { gpSize: 8 });
+    h.worker().ready();
+    await flush();
+    h.worker().result(1);
+    await expect(next).resolves.toMatchObject({ success: true });
+    h.controller.dispose();
+  });
+  it.each(['pooled', 'standalone', 'subarray'] as const)(
+    'owns a copy of %s Buffer input',
+    async (kind) => {
+      const h = await harness();
+      const buffer = kind === 'pooled' ? Buffer.from(SOURCE) : Buffer.alloc(SOURCE.length + 4);
+      const source = kind === 'subarray' ? buffer.subarray(2, SOURCE.length + 2) : buffer;
+      source.set(SOURCE);
+      const expected = new Uint8Array(source);
+      const pending = h.controller.compile(source, { gpSize: 8 });
+      source.fill(0);
+      await flush();
+      const post = h.worker().posted[1];
+      if (post?.message.type !== 'compile') throw new Error('no compile');
+      expect(post.message.source).toEqual(expected);
+      structuredClone(post.message, { transfer: post.transfer ?? [] });
+      expect(source.byteLength).toBe(expected.length);
+      h.worker().result(1);
+      await pending;
+      h.controller.dispose();
+    },
+  );
   it('validates before posting anything', async () => {
     const h = await harness();
     await expect(h.controller.compile(SOURCE, { gpSize: 4 })).rejects.toBeInstanceOf(
@@ -218,6 +321,42 @@ describe('CompilerController.compile', () => {
 });
 
 describe('cancellation', () => {
+  it('ignores a continuation cancelled before an already-ready worker resumes', async () => {
+    const h = await harness();
+    const old = h.worker();
+    const abort = new AbortController();
+    const first = settled(
+      h.controller.compile(SOURCE, { gpSize: 8, signal: abort.signal, timeoutMs: 10 }),
+    );
+    abort.abort();
+    const second = h.controller.compile(SOURCE, { gpSize: 0, timeoutMs: 100 });
+    h.worker().ready();
+    await flush();
+    await expect(first).rejects.toSatisfy(isAbortError);
+    expect(old.compiles()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(h.worker().terminated).toBe(false);
+    h.worker().result(2);
+    await expect(second).resolves.toMatchObject({ success: true });
+    h.controller.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('ignores a readiness continuation cancelled after the handshake resolves', async () => {
+    const h = await harness();
+    h.worker().crash('replace');
+    const abort = new AbortController();
+    const pending = settled(h.controller.compile(SOURCE, { gpSize: 8, signal: abort.signal }));
+    const old = h.worker();
+    old.ready();
+    abort.abort();
+    h.worker().ready();
+    await flush();
+    await expect(pending).rejects.toSatisfy(isAbortError);
+    expect(old.compiles()).toHaveLength(0);
+    h.controller.dispose();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('rejects an already-aborted request immediately without posting', async () => {
     const h = await harness();
     const controller = new AbortController();
@@ -473,6 +612,15 @@ describe('worker failures', () => {
 });
 
 describe('dispose', () => {
+  it('does not post or install a timer when disposed before the compile continuation', async () => {
+    const h = await harness();
+    const pending = settled(h.controller.compile(SOURCE, { gpSize: 8 }));
+    h.controller.dispose();
+    await flush();
+    await expect(pending).rejects.toBeInstanceOf(CompilerDisposedError);
+    expect(h.worker().compiles()).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('terminates the worker and rejects in-flight and queued requests', async () => {
     const h = await harness();
     const inflight = settled(h.controller.compile(SOURCE, { gpSize: 8 }));

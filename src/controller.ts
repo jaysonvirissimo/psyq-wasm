@@ -106,7 +106,7 @@ export class CompilerController {
     return new Promise<CompileResult>((resolve, reject) => {
       const pending: Pending = {
         id: this.#nextId(),
-        source: source.slice(),
+        source: new Uint8Array(source),
         options: normalized,
         resolve,
         reject,
@@ -145,7 +145,14 @@ export class CompilerController {
     if (this.#disposed) return Promise.reject(new CompilerDisposedError());
     if (this.#worker !== undefined) return this.#worker.ready;
 
-    const handle = this.#spawnWorker();
+    let handle: WorkerHandle;
+    try {
+      handle = this.#spawnWorker();
+    } catch (error) {
+      return Promise.reject(
+        new WorkerCrashError(`could not create worker: ${describeError(error)}`, { cause: error }),
+      );
+    }
     let resolveReady!: (worker: ActiveWorker) => void;
     let rejectReady!: (error: unknown) => void;
     const ready = new Promise<ActiveWorker>((resolve, reject) => {
@@ -171,39 +178,49 @@ export class CompilerController {
     };
     worker.failInit = fail;
 
-    let info: CompilerInfo = { psyqVersion: '4.4', gccVersion: '2.8.1', buildId: '' };
-    handle.onMessage((data) => {
-      if (this.#worker !== worker) return;
-      if (worker.isReady) {
-        this.#onMessage(data, info);
-        return;
-      }
-      if (isWorkerToMainMessage(data) && data.type === 'ready') {
-        clearTimeout(timer);
-        worker.failInit = undefined;
-        worker.isReady = true;
-        info = Object.freeze({ ...info, buildId: data.buildId });
-        this.#info = info;
-        resolveReady(worker);
-        return;
-      }
-      fail(new WorkerCrashError(`worker sent ${JSON.stringify(data)} instead of ready`));
-    });
-    handle.onError((error) => {
-      if (this.#worker !== worker) return;
-      const crash = new WorkerCrashError(`worker error: ${describeError(error)}`, { cause: error });
-      if (worker.isReady) this.#failCurrent(crash);
-      else fail(crash);
-    });
-    handle.onExit((code) => {
-      if (this.#worker !== worker) return;
-      const crash = new WorkerCrashError(`worker exited with code ${String(code)}`);
-      if (worker.isReady) this.#failCurrent(crash);
-      else fail(crash);
-    });
-
     this.#worker = worker;
-    handle.postMessage({ type: 'init', module: this.#module });
+    let info: CompilerInfo = { psyqVersion: '4.4', gccVersion: '2.8.1', buildId: '' };
+    try {
+      handle.onMessage((data) => {
+        if (this.#worker !== worker) return;
+        if (worker.isReady) {
+          this.#onMessage(data, info);
+          return;
+        }
+        if (isWorkerToMainMessage(data) && data.type === 'ready') {
+          clearTimeout(timer);
+          worker.failInit = undefined;
+          worker.isReady = true;
+          info = Object.freeze({ ...info, buildId: data.buildId });
+          this.#info = info;
+          resolveReady(worker);
+          return;
+        }
+        fail(new WorkerCrashError(`worker sent ${JSON.stringify(data)} instead of ready`));
+      });
+      handle.onError((error) => {
+        if (this.#worker !== worker) return;
+        const crash = new WorkerCrashError(`worker error: ${describeError(error)}`, {
+          cause: error,
+        });
+        if (worker.isReady) this.#failCurrent(crash);
+        else fail(crash);
+      });
+      handle.onExit((code) => {
+        if (this.#worker !== worker) return;
+        const crash = new WorkerCrashError(`worker exited with code ${String(code)}`);
+        if (worker.isReady) this.#failCurrent(crash);
+        else fail(crash);
+      });
+
+      handle.postMessage({ type: 'init', module: this.#module });
+    } catch (error) {
+      fail(
+        new WorkerCrashError(`could not initialize worker: ${describeError(error)}`, {
+          cause: error,
+        }),
+      );
+    }
     return ready;
   }
 
@@ -250,21 +267,28 @@ export class CompilerController {
       }
       return;
     }
-    // An abort or dispose while waiting drops the worker, which rejects the
-    // await above, so `next` is still the in-flight request here.
+    // Even an already-resolved ready promise yields. Cancellation, disposal,
+    // or a crash can replace this request/worker before the continuation runs.
+    if (!this.#isActive(next, worker)) return;
     next.timer = setTimeout(() => {
       this.#timeout(next);
     }, next.options.timeoutMs);
-    worker.handle.postMessage(
-      {
-        type: 'compile',
-        id: next.id,
-        filename: next.options.filename,
-        argv: buildArgv(next.options),
-        source: next.source,
-      },
-      [next.source.buffer as ArrayBuffer],
-    );
+    try {
+      worker.handle.postMessage(
+        {
+          type: 'compile',
+          id: next.id,
+          filename: next.options.filename,
+          argv: buildArgv(next.options),
+          source: next.source,
+        },
+        [next.source.buffer as ArrayBuffer],
+      );
+    } catch (error) {
+      this.#failCurrent(
+        new WorkerCrashError(`could not post compile: ${describeError(error)}`, { cause: error }),
+      );
+    }
   }
 
   #onMessage(data: unknown, info: CompilerInfo): void {
@@ -283,6 +307,10 @@ export class CompilerController {
         this.#failCurrent(new WorkerCrashError(data.message));
         return;
     }
+  }
+
+  #isActive(pending: Pending, worker: ActiveWorker): boolean {
+    return !this.#disposed && this.#current === pending && this.#worker === worker;
   }
 
   #onResult(message: ResultMessage, info: CompilerInfo): void {
@@ -326,8 +354,9 @@ export class CompilerController {
     });
   }
 
-  /** Timer callback; the timer is cleared on settle, so `pending` is still in flight. */
+  /** A callback already queued by the host must not affect a newer request. */
   #timeout(pending: Pending): void {
+    if (this.#current !== pending) return;
     this.#current = undefined;
     this.#settle(pending, () => {
       pending.reject(new CompileTimeoutError(pending.options.timeoutMs));

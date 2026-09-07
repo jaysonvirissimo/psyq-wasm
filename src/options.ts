@@ -8,6 +8,8 @@ export const WORK_DIR = '/work';
 export const RESERVED_OUTPUT_NAME = 'out.s';
 /** Input file name used when the caller does not provide one. */
 export const DEFAULT_FILENAME = 'input.i';
+/** Largest delay supported without overflow by browser and Node timers. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 export const DEFAULT_LIMITS: CompilerLimits = Object.freeze({
   maxSourceBytes: 4 * 1024 * 1024,
@@ -102,8 +104,10 @@ export function validateCompileOptions(
   const rawFlags = validateRawFlags(options['rawFlags']);
   const timeoutMs =
     options['timeoutMs'] === undefined ? limits.defaultTimeoutMs : options['timeoutMs'];
-  if (!isPositiveInteger(timeoutMs)) {
-    throw new InvalidOptionsError('timeoutMs must be a positive integer.');
+  if (!isPositiveInteger(timeoutMs) || timeoutMs > MAX_TIMEOUT_MS) {
+    throw new InvalidOptionsError(
+      `timeoutMs must be an integer between 1 and ${String(MAX_TIMEOUT_MS)}.`,
+    );
   }
   const signal = options['signal'];
   if (signal !== undefined && !(signal instanceof AbortSignal)) {
@@ -130,6 +134,9 @@ export function resolveLimits(overrides: Partial<CompilerLimits> | undefined): C
   for (const key of ['maxSourceBytes', 'defaultTimeoutMs', 'initTimeoutMs'] as const) {
     if (!isPositiveInteger(merged[key])) {
       throw new InvalidOptionsError(`limits.${key} must be a positive integer.`);
+    }
+    if (key !== 'maxSourceBytes' && merged[key] > MAX_TIMEOUT_MS) {
+      throw new InvalidOptionsError(`limits.${key} must be at most ${String(MAX_TIMEOUT_MS)}.`);
     }
   }
   return merged;

@@ -20,7 +20,7 @@ The package does not assemble, link, emulate, or score matches. It compiles.
 npm install psyq-wasm
 ```
 
-Node.js 20 or later; current Chrome, Firefox, and Safari. No
+Node.js 20 or later on Linux, macOS, and Windows; current Chrome, Firefox, and Safari. No
 `SharedArrayBuffer`, threads, or cross-origin isolation required, so it works
 from plain static hosting.
 
@@ -47,6 +47,10 @@ if (result.success) {
 
 compiler.dispose();
 ```
+
+Node `Buffer` inputs are accepted directly. The compiler snapshots input bytes
+when a request is submitted; it never detaches the caller's buffer, and later
+caller mutations do not change queued compilation input.
 
 The same code runs in Node.js; the `node` export condition selects an entry
 that uses `worker_threads`:
@@ -145,6 +149,9 @@ rejections.
 | `maxSourceBytes`   | 4 MiB   | `createCompiler({ limits })`                       |
 | `defaultTimeoutMs` | 20 000  | `createCompiler({ limits })`, per-call `timeoutMs` |
 | `initTimeoutMs`    | 10 000  | `createCompiler({ limits })`                       |
+
+All timeout values must be integers from 1 through 2,147,483,647 milliseconds.
+Larger values reject with `InvalidOptionsError` instead of overflowing host timers.
 
 ## Hosting and bundlers
 

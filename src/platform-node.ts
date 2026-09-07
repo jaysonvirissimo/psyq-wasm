@@ -17,7 +17,7 @@ export interface NodeWorkerLike {
 
 export interface NodePlatformDeps {
   readonly Worker?: new (url: URL, options?: { type?: 'module' }) => NodeWorkerLike;
-  readonly readFile?: (path: string) => Promise<Uint8Array>;
+  readonly readFile?: (url: URL) => Promise<Uint8Array>;
   /** The entry module URL used to resolve package-relative assets. */
   readonly baseUrl?: URL;
 }
@@ -44,7 +44,7 @@ function wrap(worker: NodeWorkerLike): WorkerHandle {
 
 export function createNodePlatform(deps: NodePlatformDeps = {}): Platform {
   const WorkerCtor = deps.Worker ?? Worker;
-  const read = deps.readFile ?? ((path: string) => readFile(path));
+  const read = deps.readFile ?? ((url: URL) => readFile(url));
   const baseUrl = deps.baseUrl ?? new URL(import.meta.url);
   const defaultWorkerUrl = (): URL => new URL('./worker.node.js', baseUrl);
   return {

@@ -7,6 +7,7 @@
  *
  * Also importable: `import { generate } from './gen-stress-fixture.mjs'`.
  */
+import { pathToFileURL } from 'node:url';
 
 const CASES = 32;
 
@@ -36,7 +37,7 @@ export function generate(n) {
 const invokedDirectly =
   typeof process !== 'undefined' &&
   process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href;
+  import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   const n = Number(process.argv[2] ?? '3000');

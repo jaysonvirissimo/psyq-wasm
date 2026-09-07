@@ -108,9 +108,13 @@ on the command line, and so does `build/build-wasm.sh`.
 
 ## 6. WebAssembly toolchain and flags
 
-| Field            | Value                    |
-| ---------------- | ------------------------ |
-| Emscripten image | `emscripten/emsdk:6.0.9` |
+| Field            | Value                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| Emscripten image | `emscripten/emsdk@sha256:3ba391c5b1554e06f9af0a69652ff20919dff14e771619339dba988bd62574b5` |
+
+Canonical platform: `linux/amd64`, using Emscripten 6.0.9. Every build records
+this platform, compiles all 70 objects in a fresh temporary directory, and
+reapplies the compatibility patch. Only system libraries are cached.
 
 Per-object compile flags (`CC1_WASM_CFLAGS`):
 
@@ -145,8 +149,10 @@ its own fidelity investigation.
 ## 7. Reproducibility
 
 Rebuilding with identical pinned inputs is expected to produce identical
-`cc1psx.wasm` bytes. The release workflow builds the artifact twice and fails if
-the hashes differ. If a toolchain update introduces non-determinism, this
+`cc1psx.wasm` bytes. The release workflow rebuilds the source archive in two independent clean
+directories and compares both Wasm and glue hashes with the release artifacts.
+It freshly regenerates reference sources and verifies all fixture bytes,
+diagnostics, and exit statuses without overwriting committed expectations. If a toolchain update introduces non-determinism, this
 section must describe it rather than the project claiming bit-for-bit
 reproducibility it does not have. Compiler-output fidelity (the differential
 tests) is required regardless.
@@ -156,7 +162,7 @@ tests) is required regardless.
 The compiler artifact is a GPL-2.0-only work. Each release publishes a source
 archive produced by `scripts/pack-source-archive.sh` containing:
 
-- the pinned `homebrew-psyq` tree at the commit above (the complete GCC 2.8.1
+- the pinned `homebrew-psyq` tree at `psyq-wasm/build/vendor/homebrew-psyq`, at the commit above (the complete GCC 2.8.1
   PsyQ sources);
 - `build/` from this repository: pins, object list, generated sources, the
   compatibility patch, and every build script;
@@ -164,3 +170,10 @@ archive produced by `scripts/pack-source-archive.sh` containing:
 
 The npm package itself contains only the compiled artifact and the MIT
 wrapper; it points here for the corresponding source.
+
+Extract the archive, enter `psyq-wasm/`, and run
+`build/build-wasm.sh --offline-source`. The bundled source checksums and commit/tree
+record are verified before Docker runs. No Git metadata, npm installation, or
+separate project checkout is needed. Docker may fetch the pinned image once;
+compilation itself uses `--network none`. The release workflow rebuilds this
+archive before publishing binaries.
