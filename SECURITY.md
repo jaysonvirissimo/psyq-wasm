@@ -25,11 +25,15 @@ reproduces the problem.
 
 ## Threat model in brief
 
-The compiler runs untrusted preprocessed C inside WebAssembly, in a dedicated
-worker, on an in-memory virtual filesystem, with no network access and no host
-filesystem access. The library enforces source-size limits and a compile
-timeout, and it terminates and replaces the worker on timeout, cancellation, or
-crash. This bounds resource use but is not a security boundary against
+The preprocessor and the compiler run untrusted C and untrusted virtual headers
+inside WebAssembly, in a dedicated worker, on an in-memory virtual filesystem,
+with no network access and no host filesystem access. Virtual header paths are
+validated (relative, no `.`/`..`, no absolute paths) and bounded by the
+`maxHeaderCount` and `maxHeaderBytes` limits; preprocessor switches are limited to
+an allow-list so a request cannot redirect output or read other files; the
+preprocessor's own include-depth limit bounds recursive inclusion. The library
+enforces source-size limits and a timeout covering both stages, and it
+terminates and replaces the worker on timeout, cancellation, or crash. This bounds resource use but is not a security boundary against
 vulnerabilities in the browser or WebAssembly runtime itself; treat it as one
 layer of defence.
 

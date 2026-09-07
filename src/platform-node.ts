@@ -51,6 +51,7 @@ export function createNodePlatform(deps: NodePlatformDeps = {}): Platform {
     baseUrl,
     defaultWorkerUrl,
     defaultWasmUrl: () => new URL('./cc1psx.wasm', baseUrl),
+    defaultPreprocessorWasmUrl: () => new URL('./cccp.wasm', baseUrl),
     loadModule: (url) => loadWasmModule(url, { readFile: read }),
     spawnWorker: (url) => wrap(new WorkerCtor(url ?? defaultWorkerUrl(), { type: 'module' })),
   };

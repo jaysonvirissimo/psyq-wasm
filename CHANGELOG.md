@@ -9,6 +9,27 @@ changes, because they can alter emitted assembly.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-07
+
+### Added
+
+- `compileSource()`: raw C in, exact PsyQ assembly out. The matching GCC 2.8.1
+  preprocessor (`cccp`) now ships as `dist/cccp.wasm` and runs in the same worker
+  before `cc1psx`. Options: `headers` (virtual include files keyed by relative
+  path), `cppFlags` (defaulting to the exported `DEFAULT_CPP_FLAGS`, the PsyQ 4.4
+  predefines; `-D`, `-U`, `-I`, `-W`, `-pedantic`, `-pedantic-errors`,
+  `-trigraphs`, `-lang-c`, `-traditional` accepted), and `encoding`
+  (`'utf8'` pass-through or `'eucjp'` re-encoding of the preprocessed text).
+- `CompileResult.preprocessed` (the exact bytes handed to the compiler),
+  `CompileFailure.stage` (`'preprocess'` or `'compile'`), and
+  `CompileTimings.preprocessMs`.
+- `CompilerInfo.preprocessorBuildId`, `CreateCompilerOptions.preprocessorWasmUrl`,
+  and the `maxHeaderBytes` / `maxHeaderCount` limits.
+- `encodeEucJp()` and `EncodingError` (`code: 'encoding'`): an in-tree EUC-JP
+  encoder with the JIS X 0208/0212 mappings; unmappable characters reject the
+  request instead of being substituted.
+- Package export `psyq-wasm/cccp.wasm`.
+
 ### Fixed
 
 - Snapshot Node `Buffer` inputs without aliasing or detaching caller storage.
@@ -19,6 +40,12 @@ changes, because they can alter emitted assembly.
 
 ### Compiler build
 
+- Build `cccp.wasm` (5 objects, `build/cccp-objs.txt`) next to `cc1psx.wasm` with the
+  same flags under its own export name; commit the bison-generated `cexp.c` to
+  `build/gen` and record the preprocessor artifact in `build-info.json`, `SHA256SUMS`,
+  and `PROVENANCE.md`.
+- Set `thisProgram` so program-level diagnostics carry `cc1psx:` / `cccp:` like the
+  reference binaries.
 - Pin Emscripten 6.0.9 by digest and use the canonical `linux/amd64` platform.
 - Recompile all objects in a fresh directory and reapply compatibility patches on every build.
 - Ship verifiable source exports that rebuild without Git metadata or another checkout.
@@ -27,6 +54,11 @@ changes, because they can alter emitted assembly.
 
 ### Tests
 
+- Preprocessing differential suite: every fixture `.c` must reproduce its committed
+  `.i` through `cccp.wasm`, and new fixtures cover `#include` with virtual headers,
+  macros, EUC-JP string literals (re-encoded after preprocessing, as the reference
+  build systems do), and a `#error` failure. `build/compile-fixtures.sh` now runs in
+  three stages (preprocess, transcode with Ruby, compile) with a pipeline-order check.
 - Add cancellation, buffer ownership, failure propagation, timer, and archive verification regressions.
 - Exercise Node 20/22/24 on Linux and Node 24 on macOS/Windows, including packed-package consumers.
 
@@ -53,5 +85,6 @@ changes, because they can alter emitted assembly.
 - Initial artifact: homebrew-psyq `bdee891` (GCC 2.8.1 / PsyQ 4.4), Emscripten
   6.0.9, `-O2 -flto` objects with an `-O1` link.
 
-[Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jaysonvirissimo/psyq-wasm/releases/tag/v0.1.0

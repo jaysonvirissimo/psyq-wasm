@@ -4,7 +4,7 @@
 
 | Field               | Value                                               |
 | ------------------- | --------------------------------------------------- |
-| Status              | Draft                                               |
+| Status              | Draft (M4 delivered in 0.2.0)                       |
 | Initial compiler    | PsyQ 4.4 / GCC 2.8.1 / `mips-psx`                   |
 | Primary runtime     | Modern web browsers                                 |
 | Secondary runtime   | Node.js                                             |
@@ -39,7 +39,7 @@ preprocessed C bytes
 exact PsyQ assembly bytes
 ```
 
-A later API will add the PsyQ preprocessor and source-encoding pipeline so callers can provide normal C source.
+A second API, `compileSource()`, runs the matching PsyQ preprocessor and an optional EUC-JP stage in front of it so callers can provide normal C source (delivered in 0.2.0, see §12).
 
 `psyq-wasm` does not assemble, link, emulate a PlayStation, or score decompilation matches.
 
@@ -624,7 +624,7 @@ It accepts exact source bytes and does not:
 
 ### 10.2 Convenience layer
 
-`compileSource()` is added later.
+`compileSource()` is the convenience layer (available since 0.2.0).
 
 It provides:
 
@@ -647,6 +647,9 @@ export interface CompilerInfo {
    * Include this in bug reports and saved compilation records.
    */
   buildId: string;
+
+  /** Opaque identifier for the exact preprocessor artifact. */
+  preprocessorBuildId: string;
 }
 
 export interface CompilerDiagnostic {
@@ -661,6 +664,8 @@ export interface CompileTimings {
   instantiateMs: number;
   compileMs: number;
   totalMs: number;
+  /** compileSource() only: time inside the preprocessor. */
+  preprocessMs?: number;
 }
 
 export interface CompileSuccess {
@@ -680,6 +685,9 @@ export interface CompileSuccess {
    */
   text: string;
 
+  /** compileSource() only: the exact bytes handed to the compiler. */
+  preprocessed?: Uint8Array;
+
   diagnostics: CompilerDiagnostic[];
   rawStdout: string;
   rawStderr: string;
@@ -697,6 +705,11 @@ export interface CompileFailure {
    */
   asm?: Uint8Array;
   text?: string;
+
+  /** compileSource() only. */
+  preprocessed?: Uint8Array;
+  /** compileSource() only: which program reported the exit code. */
+  stage?: "preprocess" | "compile";
 
   diagnostics: CompilerDiagnostic[];
   rawStdout: string;
@@ -774,16 +787,35 @@ export interface CompileSourceOptions
   /**
    * Virtual include files.
    *
-   * Keys are virtual paths.
+   * Keys are paths relative to the source file's directory; no `.`, `..`,
+   * or absolute paths. Quote-includes resolve relative to the including
+   * file; angle-includes search only the -I directories in cppFlags.
    */
   headers?: Readonly<Record<string, string | Uint8Array>>;
 
   /**
-   * Source encoding policy used by the convenience pipeline.
+   * Preprocessor switches. Defaults to DEFAULT_CPP_FLAGS (the PsyQ 4.4
+   * predefines). Accepted forms: -D, -U, -I, -W, -pedantic,
+   * -pedantic-errors, -trigraphs, -lang-c, -traditional. The wrapper owns
+   * -nostdinc, -undef, and the input/output paths.
    */
-  encoding?: "eucjp" | "utf8" | "raw";
+  cppFlags?: readonly string[];
+
+  /**
+   * Source encoding policy: "utf8" passes the preprocessed bytes through,
+   * "eucjp" re-encodes the preprocessed text as EUC-JP.
+   */
+  encoding?: "utf8" | "eucjp";
 }
 ```
+
+The `"raw"` value once sketched here was dropped: `"utf8"` already means
+"no transcoding", so raw EUC-JP bytes given as a `Uint8Array` pass through
+unchanged under it.
+
+Total header size and header count are limited (`maxHeaderBytes`,
+`maxHeaderCount` in `CompilerLimits`).
+
 
 ---
 
@@ -807,11 +839,9 @@ export interface Compiler {
 }
 ```
 
-`compileSource()` may be absent from early `0.x` releases until the preprocessor and encoding pipeline are complete.
+`compileSource()` was absent from 0.1.0 (never stubbed) and is present from 0.2.0 on.
 
-If so, it should not be included as a stub that always throws.
-
-The exported type surface should describe what the published version actually supports.
+The exported type surface describes what the published version actually supports.
 
 ---
 
@@ -819,8 +849,10 @@ The exported type surface should describe what the published version actually su
 
 ```ts
 export interface CreateCompilerOptions {
-  workerUrl?: string;
-  wasmUrl?: string;
+  workerUrl?: string | URL;
+  wasmUrl?: string | URL;
+  preprocessorWasmUrl?: string | URL;
+  limits?: Partial<CompilerLimits>;
 }
 
 export function createCompiler(
@@ -864,9 +896,7 @@ Preprocessing is intentionally separate from the exact compiler primitive.
 
 ### 12.1 Preprocessor
 
-The convenience layer will use the matching GCC preprocessor from the same historical toolchain.
-
-The browser build will provide it as a separate WebAssembly component.
+The convenience layer uses the matching GCC 2.8.1 preprocessor (`cccp`) from the same historical toolchain, built to `cccp.wasm` (5 objects: `cccp.o cexp.o prefix.o version.o obstack.o`, the reference link line) with the same Emscripten settings as the compiler. Both modules are loaded once by the controller and sent to the same worker; a `compileSource()` request runs the preprocessor instance, the encoding step, and the compiler instance inside one worker request, so one timeout and one cancellation cover the whole pipeline. The compiler instance receives only the preprocessed file, never the source or the headers.
 
 ```text
 raw C
@@ -886,29 +916,21 @@ compilePreprocessed()
 
 ### 12.2 EUC-JP
 
-Some PlayStation source pipelines use EUC-JP before the compiler stage.
+Some PlayStation source pipelines use EUC-JP before the compiler stage: the source is kept in UTF-8, preprocessed, and the preprocessed text is re-encoded as EUC-JP for the compiler. The browser platform does not provide a standard EUC-JP `TextEncoder`.
 
-The browser platform does not provide a standard EUC-JP `TextEncoder`.
+Decisions (0.2.0):
 
-The project must therefore choose an implementation.
+* The encoder is in-tree (`src/eucjp.ts`, MIT). Its JIS X 0208 and JIS X 0212 tables are generated by `scripts/gen-eucjp-table.rb` from Ruby's EUC-JP converter, which implements the JIS mappings shared by iconv and Python (U+301C WAVE DASH, U+2212 MINUS SIGN, U+00A2 CENT SIGN, ...), not the WHATWG `euc-jp` aliases browsers decode with. The same Ruby converter transcodes the reference fixtures, so the encoder equals the test oracle by construction; CI checks the committed table against a regeneration.
+* Encoding happens after preprocessing (`cccp` is byte-transparent), matching the reference build systems. Consequently `#if` over a multibyte character constant is evaluated over UTF-8 bytes.
+* Unmappable characters (U+00A5, U+203E, the WHATWG-only aliases, emoji, lone surrogates) reject the request with `EncodingError` naming the character and its line. Nothing is substituted.
+* Measured payload: about 29 KB gzipped for the table.
 
-The selected encoder must have:
+`compilePreprocessed()` performs no encoding. Callers who need other policies can build their own bytes (`encodeEucJp()` is exported) and use the exact layer.
 
-* deterministic output;
-* documented behavior for unmappable characters;
-* a compatible license;
-* tests against known byte sequences;
-* a measured payload cost.
-
-`compilePreprocessed()` performs no encoding.
-
-If exact EUC-JP bytes are required, callers can supply those bytes directly even before `compileSource()` exists.
 
 ### 12.3 Pipeline-order tests
 
-The project must test where encoding occurs relative to preprocessing.
-
-The convenience API is not considered fidelity-complete until its output has been compared with the reference preprocessing and compilation pipeline.
+`build/compile-fixtures.sh` checks that encoding the source before preprocessing yields the same bytes as encoding the preprocessed output afterwards, and the differential suite compares `compileSource()`'s `preprocessed` bytes and assembly with the reference pipeline for every fixture.
 
 ---
 
@@ -1466,14 +1488,7 @@ If a future compiler change exceeds the target, fidelity takes priority over pay
 
 ### 20.2 Full source pipeline
 
-The later package containing:
-
-* preprocessor;
-* EUC-JP support;
-* compiler;
-* worker glue;
-
-should target a compressed payload of no more than about 3 MB unless measurements show a larger package is justified.
+The full pipeline (preprocessor, EUC-JP support, compiler, worker glue) must stay under about 3 MB compressed; the artifact test enforces it. Measured in 0.2.0: `cccp.wasm` about 50 KB gzipped plus 37 KB of glue and 29 KB of encoder table, on top of the compiler core.
 
 ### 20.3 Compile latency
 
@@ -1806,20 +1821,18 @@ Acceptance:
 
 ---
 
-### M4 — Raw-source pipeline
+### M4 — Raw-source pipeline (delivered in 0.2.0)
 
-Deliver:
+Delivered:
 
-* browser `cccp`;
+* browser `cccp` (`dist/cccp.wasm`);
 * virtual headers;
 * exact preprocessing pipeline;
 * EUC-JP implementation;
 * `compileSource()`;
-* preprocessing differential tests.
+* preprocessing differential tests (every fixture `.c` reproduces its `.i`; new fixtures cover includes, macros, EUC-JP, and a `#error`).
 
-Acceptance:
-
-* convenience pipeline reproduces the reference preprocessing and compilation results for the supported fixture set.
+Acceptance met: the convenience pipeline reproduces the reference preprocessing and compilation results for the whole fixture set, in Node and in all three browsers.
 
 ---
 
@@ -1850,17 +1863,11 @@ Version-specific compiler behavior must remain isolated.
 
 ### 26.2 Preprocessor fidelity
 
-The first compiler API begins after preprocessing.
-
-The later convenience pipeline must prove its own fidelity.
-
-A correct `cc1psx.wasm` does not automatically imply a correct `compileSource()` pipeline.
+The first compiler API begins after preprocessing; the convenience pipeline proves its own fidelity with the preprocessing differential suite (resolved in 0.2.0). Two behaviours of the historical preprocessor remain caller-visible: `__DATE__`/`__TIME__` are not reproducible, and `\` + CRLF is not a line continuation.
 
 ### 26.3 EUC-JP
 
-The browser has no standard EUC-JP encoder.
-
-The implementation and unmappable-character policy remain open until the raw-source milestone.
+The browser has no standard EUC-JP encoder. Resolved in 0.2.0: in-tree JIS-mapping encoder generated from Ruby's converter, unmappable characters rejected (§12.2).
 
 ### 26.4 Browser performance
 

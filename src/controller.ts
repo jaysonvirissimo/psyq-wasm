@@ -1,27 +1,34 @@
 // SPDX-License-Identifier: MIT
 /**
- * Main-thread controller: owns the compiled `WebAssembly.Module`, drives one
+ * Main-thread controller: owns the compiled `WebAssembly.Module`s, drives one
  * worker at a time, queues requests, and implements cancellation, timeouts,
  * and terminate-and-respawn recovery.
  */
-import { buildArgv } from './argv.js';
+import { buildArgv, buildCppArgv } from './argv.js';
 import {
   CompileTimeoutError,
   CompilerDisposedError,
+  EncodingError,
   InternalError,
   WorkerCrashError,
   createAbortError,
 } from './errors.js';
 import {
+  RESERVED_PREPROCESSED_NAME,
+  normalizeSourceInput,
   validateCompileOptions,
   validateSource,
-  type NormalizedCompileOptions,
+  validateSourceOptions,
 } from './options.js';
 import {
   createRequestIdGenerator,
   isWorkerToMainMessage,
+  type CompileMessage,
   type MainToWorkerMessage,
+  type ProgramModules,
+  type RejectMessage,
   type ResultMessage,
+  type SourceMessage,
 } from './protocol.js';
 import type { CompileResult, CompilerInfo, CompilerLimits } from './public-types.js';
 import { buildCompileResult } from './result.js';
@@ -38,15 +45,18 @@ export interface WorkerHandle {
 export type WorkerFactory = () => WorkerHandle;
 
 export interface ControllerOptions {
-  readonly module: WebAssembly.Module;
+  readonly modules: ProgramModules;
   readonly spawnWorker: WorkerFactory;
   readonly limits: CompilerLimits;
 }
 
 interface Pending {
   readonly id: number;
-  readonly source: Uint8Array;
-  readonly options: NormalizedCompileOptions;
+  /** The fully built request; its buffers are owned by the controller and transferred on post. */
+  readonly message: CompileMessage | SourceMessage;
+  readonly transfer: ArrayBuffer[];
+  readonly timeoutMs: number;
+  readonly signal: AbortSignal | undefined;
   readonly resolve: (result: CompileResult) => void;
   readonly reject: (reason: unknown) => void;
   onAbort?: () => void;
@@ -67,7 +77,7 @@ function describeError(err: unknown): string {
 }
 
 export class CompilerController {
-  readonly #module: WebAssembly.Module;
+  readonly #modules: ProgramModules;
   readonly #spawnWorker: WorkerFactory;
   readonly #limits: CompilerLimits;
   readonly #nextId = createRequestIdGenerator();
@@ -78,49 +88,61 @@ export class CompilerController {
   #disposed = false;
 
   constructor(options: ControllerOptions) {
-    this.#module = options.module;
+    this.#modules = options.modules;
     this.#spawnWorker = options.spawnWorker;
     this.#limits = options.limits;
   }
 
   /** Spawn the first worker and wait for its handshake. */
-  async start(): Promise<string> {
+  async start(): Promise<CompilerInfo> {
     await this.#ensureWorker();
-    return this.buildId;
+    return this.info;
   }
 
-  get buildId(): string {
+  get info(): CompilerInfo {
     if (this.#info === undefined) {
       throw new InternalError('the compiler has not been started');
     }
-    return this.#info.buildId;
+    return this.#info;
   }
 
   async compile(source: Uint8Array, options: unknown): Promise<CompileResult> {
     if (this.#disposed) throw new CompilerDisposedError();
     validateSource(source, this.#limits);
     const normalized = validateCompileOptions(options, this.#limits);
-    if (normalized.signal?.aborted === true) {
-      throw createAbortError(normalized.signal);
-    }
-    return new Promise<CompileResult>((resolve, reject) => {
-      const pending: Pending = {
-        id: this.#nextId(),
-        source: new Uint8Array(source),
-        options: normalized,
-        resolve,
-        reject,
-      };
-      if (normalized.signal !== undefined) {
-        const signal = normalized.signal;
-        pending.onAbort = () => {
-          this.#abort(pending, signal);
-        };
-        signal.addEventListener('abort', pending.onAbort, { once: true });
-      }
-      this.#queue.push(pending);
-      void this.#pump();
-    });
+    const bytes = new Uint8Array(source);
+    return this.#enqueue(
+      (id) => ({
+        type: 'compile',
+        id,
+        filename: normalized.filename,
+        argv: buildArgv(normalized),
+        source: bytes,
+      }),
+      [bytes.buffer],
+      normalized,
+    );
+  }
+
+  async compileSource(source: unknown, options: unknown): Promise<CompileResult> {
+    if (this.#disposed) throw new CompilerDisposedError();
+    const bytes = normalizeSourceInput(source);
+    validateSource(bytes, this.#limits);
+    const normalized = validateSourceOptions(options, this.#limits);
+    return this.#enqueue(
+      (id) => ({
+        type: 'source',
+        id,
+        filename: normalized.filename,
+        cppArgv: buildCppArgv(normalized),
+        headers: normalized.headers,
+        encoding: normalized.encoding,
+        argv: buildArgv({ ...normalized, filename: RESERVED_PREPROCESSED_NAME }),
+        source: bytes,
+      }),
+      [bytes.buffer as ArrayBuffer, ...normalized.headers.map((h) => h.data.buffer as ArrayBuffer)],
+      normalized,
+    );
   }
 
   dispose(): void {
@@ -137,6 +159,40 @@ export class CompilerController {
       });
     }
     this.#dropWorker();
+  }
+
+  // --- request flow -------------------------------------------------------
+
+  #enqueue(
+    build: (id: number) => CompileMessage | SourceMessage,
+    transfer: ArrayBuffer[],
+    options: { readonly timeoutMs: number; readonly signal: AbortSignal | undefined },
+  ): Promise<CompileResult> {
+    if (options.signal?.aborted === true) {
+      // Callers are async, so this surfaces as a rejection.
+      throw createAbortError(options.signal);
+    }
+    return new Promise<CompileResult>((resolve, reject) => {
+      const id = this.#nextId();
+      const pending: Pending = {
+        id,
+        message: build(id),
+        transfer,
+        timeoutMs: options.timeoutMs,
+        signal: options.signal,
+        resolve,
+        reject,
+      };
+      if (options.signal !== undefined) {
+        const signal = options.signal;
+        pending.onAbort = () => {
+          this.#abort(pending, signal);
+        };
+        signal.addEventListener('abort', pending.onAbort, { once: true });
+      }
+      this.#queue.push(pending);
+      void this.#pump();
+    });
   }
 
   // --- worker lifecycle ---------------------------------------------------
@@ -179,20 +235,23 @@ export class CompilerController {
     worker.failInit = fail;
 
     this.#worker = worker;
-    let info: CompilerInfo = { psyqVersion: '4.4', gccVersion: '2.8.1', buildId: '' };
     try {
       handle.onMessage((data) => {
         if (this.#worker !== worker) return;
         if (worker.isReady) {
-          this.#onMessage(data, info);
+          this.#onMessage(data);
           return;
         }
         if (isWorkerToMainMessage(data) && data.type === 'ready') {
           clearTimeout(timer);
           worker.failInit = undefined;
           worker.isReady = true;
-          info = Object.freeze({ ...info, buildId: data.buildId });
-          this.#info = info;
+          this.#info = Object.freeze({
+            psyqVersion: '4.4',
+            gccVersion: '2.8.1',
+            buildId: data.buildId,
+            preprocessorBuildId: data.preprocessorBuildId,
+          });
           resolveReady(worker);
           return;
         }
@@ -213,7 +272,7 @@ export class CompilerController {
         else fail(crash);
       });
 
-      handle.postMessage({ type: 'init', module: this.#module });
+      handle.postMessage({ type: 'init', modules: this.#modules });
     } catch (error) {
       fail(
         new WorkerCrashError(`could not initialize worker: ${describeError(error)}`, {
@@ -237,8 +296,6 @@ export class CompilerController {
     this.#dropWorker();
     void this.#pump();
   }
-
-  // --- request flow -------------------------------------------------------
 
   async #pump(): Promise<void> {
     if (this.#disposed || this.#current !== undefined) return;
@@ -272,26 +329,19 @@ export class CompilerController {
     if (!this.#isActive(next, worker)) return;
     next.timer = setTimeout(() => {
       this.#timeout(next);
-    }, next.options.timeoutMs);
+    }, next.timeoutMs);
     try {
-      worker.handle.postMessage(
-        {
-          type: 'compile',
-          id: next.id,
-          filename: next.options.filename,
-          argv: buildArgv(next.options),
-          source: next.source,
-        },
-        [next.source.buffer as ArrayBuffer],
-      );
+      worker.handle.postMessage(next.message, next.transfer);
     } catch (error) {
       this.#failCurrent(
-        new WorkerCrashError(`could not post compile: ${describeError(error)}`, { cause: error }),
+        new WorkerCrashError(`could not post ${next.message.type}: ${describeError(error)}`, {
+          cause: error,
+        }),
       );
     }
   }
 
-  #onMessage(data: unknown, info: CompilerInfo): void {
+  #onMessage(data: unknown): void {
     if (!isWorkerToMainMessage(data)) {
       this.#failCurrent(new InternalError(`unexpected worker message: ${JSON.stringify(data)}`));
       return;
@@ -301,7 +351,10 @@ export class CompilerController {
         // A duplicate handshake is harmless.
         return;
       case 'result':
-        this.#onResult(data, info);
+        this.#onResult(data);
+        return;
+      case 'reject':
+        this.#onReject(data);
         return;
       case 'crash':
         this.#failCurrent(new WorkerCrashError(data.message));
@@ -313,15 +366,38 @@ export class CompilerController {
     return !this.#disposed && this.#current === pending && this.#worker === worker;
   }
 
-  #onResult(message: ResultMessage, info: CompilerInfo): void {
+  /** Take the in-flight request for a reply carrying its id; anything else is a protocol violation. */
+  #takeCurrent(id: number): Pending | undefined {
     const current = this.#current;
-    if (current?.id !== message.id) {
-      this.#failCurrent(new InternalError(`result for unknown request ${String(message.id)}`));
-      return;
+    if (current?.id !== id) {
+      this.#failCurrent(new InternalError(`reply for unknown request ${String(id)}`));
+      return undefined;
     }
     this.#current = undefined;
+    return current;
+  }
+
+  #onResult(message: ResultMessage): void {
+    const current = this.#takeCurrent(message.id);
+    if (current === undefined) return;
+    const info = this.info;
     this.#settle(current, () => {
       current.resolve(buildCompileResult(message, info));
+    });
+    void this.#pump();
+  }
+
+  /** The worker declined the request but is still healthy: no respawn. */
+  #onReject(message: RejectMessage): void {
+    const current = this.#takeCurrent(message.id);
+    if (current === undefined) return;
+    this.#settle(current, () => {
+      current.reject(
+        new EncodingError(message.message, {
+          character: message.character,
+          index: message.index,
+        }),
+      );
     });
     void this.#pump();
   }
@@ -359,7 +435,7 @@ export class CompilerController {
     if (this.#current !== pending) return;
     this.#current = undefined;
     this.#settle(pending, () => {
-      pending.reject(new CompileTimeoutError(pending.options.timeoutMs));
+      pending.reject(new CompileTimeoutError(pending.timeoutMs));
     });
     this.#replaceWorker();
   }
@@ -368,7 +444,7 @@ export class CompilerController {
   #settle(pending: Pending, done: () => void): void {
     if (pending.timer !== undefined) clearTimeout(pending.timer);
     if (pending.onAbort !== undefined) {
-      pending.options.signal?.removeEventListener('abort', pending.onAbort);
+      pending.signal?.removeEventListener('abort', pending.onAbort);
     }
     done();
   }

@@ -13,6 +13,17 @@ const EMPTY_MODULE = new WebAssembly.Module(
 );
 
 const timings = { instantiateMs: 14.1, compileMs: 140.85, totalMs: 154.95 };
+const modules = { cc1: EMPTY_MODULE, cccp: EMPTY_MODULE };
+const source = {
+  type: 'source',
+  id: 1,
+  filename: 'rations.c',
+  cppArgv: ['-nostdinc', '-undef', 'rations.c', 'out.i'],
+  headers: [{ path: 'codec.h', data: new Uint8Array([0x69]) }],
+  encoding: 'utf8',
+  argv: ['-quiet', '-G', '8', 'out.i', '-o', 'out.s'],
+  source: new Uint8Array([0x69]),
+};
 
 describe('createRequestIdGenerator', () => {
   it('starts at 1 and increments', () => {
@@ -44,8 +55,10 @@ describe('createRequestIdGenerator', () => {
 });
 
 describe('isMainToWorkerMessage', () => {
-  it('accepts init and compile messages', () => {
-    expect(isMainToWorkerMessage({ type: 'init', module: EMPTY_MODULE })).toBe(true);
+  it('accepts init, compile, and source messages', () => {
+    expect(isMainToWorkerMessage({ type: 'init', modules })).toBe(true);
+    expect(isMainToWorkerMessage(source)).toBe(true);
+    expect(isMainToWorkerMessage({ ...source, headers: [], encoding: 'eucjp' })).toBe(true);
     expect(
       isMainToWorkerMessage({
         type: 'compile',
@@ -62,21 +75,77 @@ describe('isMainToWorkerMessage', () => {
     ['init'],
     [{}],
     [{ type: 'init' }],
-    [{ type: 'init', module: {} }],
+    [{ type: 'init', module: EMPTY_MODULE }],
+    [{ type: 'init', modules: { cc1: EMPTY_MODULE } }],
+    [{ type: 'init', modules: { cc1: EMPTY_MODULE, cccp: {} } }],
+    [{ type: 'init', modules: null }],
+    [{ ...source, id: '1' }],
+    [{ ...source, filename: 7 }],
+    [{ ...source, cppArgv: 'x' }],
+    [{ ...source, cppArgv: ['-D', 3] }],
+    [{ ...source, argv: [3] }],
+    [{ ...source, source: [1] }],
+    [{ ...source, encoding: 'raw' }],
+    [{ ...source, headers: { 'codec.h': new Uint8Array() } }],
+    [{ ...source, headers: [{ path: 'codec.h' }] }],
+    [{ ...source, headers: [{ path: 3, data: new Uint8Array() }] }],
+    [{ ...source, headers: [{ path: 'codec.h', data: 'text' }] }],
+    [{ ...source, headers: [null] }],
     [{ type: 'compile', id: '1', filename: 'x', argv: [], source: new Uint8Array() }],
     [{ type: 'compile', id: 1, filename: 7, argv: [], source: new Uint8Array() }],
     [{ type: 'compile', id: 1, filename: 'x', argv: ['-O2', 3], source: new Uint8Array() }],
     [{ type: 'compile', id: 1, filename: 'x', argv: 'x', source: new Uint8Array() }],
     [{ type: 'compile', id: 1, filename: 'x', argv: [], source: [1, 2] }],
-    [{ type: 'ready', buildId: 'x' }],
+    [{ type: 'ready', buildId: 'x', preprocessorBuildId: 'y' }],
   ])('rejects %j', (bad) => {
     expect(isMainToWorkerMessage(bad)).toBe(false);
   });
 });
 
 describe('isWorkerToMainMessage', () => {
-  it('accepts ready, result, and crash messages', () => {
-    expect(isWorkerToMainMessage({ type: 'ready', buildId: 'sha256:abc' })).toBe(true);
+  it('accepts ready, result, reject, and crash messages', () => {
+    expect(
+      isWorkerToMainMessage({
+        type: 'ready',
+        buildId: 'sha256:abc',
+        preprocessorBuildId: 'sha256:def',
+      }),
+    ).toBe(true);
+    expect(
+      isWorkerToMainMessage({
+        type: 'result',
+        id: 4,
+        exitCode: 33,
+        preprocessed: new Uint8Array(),
+        stage: 'preprocess',
+        stdout: '',
+        stderr: '',
+        timings: { ...timings, preprocessMs: 1.5 },
+      }),
+    ).toBe(true);
+    expect(
+      isWorkerToMainMessage({
+        type: 'result',
+        id: 5,
+        exitCode: 1,
+        asm: new Uint8Array(),
+        preprocessed: new Uint8Array(),
+        stage: 'compile',
+        stdout: '',
+        stderr: '',
+        timings,
+      }),
+    ).toBe(true);
+    expect(
+      isWorkerToMainMessage({
+        type: 'reject',
+        id: 6,
+        code: 'encoding',
+        message: 'no mapping',
+        character: '¥',
+        index: 3,
+      }),
+    ).toBe(true);
     expect(
       isWorkerToMainMessage({
         type: 'result',
@@ -107,6 +176,26 @@ describe('isWorkerToMainMessage', () => {
     [42],
     [{ type: 'ready' }],
     [{ type: 'ready', buildId: 1 }],
+    [{ type: 'ready', buildId: 'x' }],
+    [{ type: 'ready', buildId: 'x', preprocessorBuildId: 2 }],
+    [{ type: 'result', id: 1, exitCode: 0, stdout: '', stderr: '', timings, preprocessed: 'i' }],
+    [{ type: 'result', id: 1, exitCode: 0, stdout: '', stderr: '', timings, stage: 'link' }],
+    [
+      {
+        type: 'result',
+        id: 1,
+        exitCode: 0,
+        stdout: '',
+        stderr: '',
+        timings: { ...timings, preprocessMs: '1' },
+      },
+    ],
+    [{ type: 'reject', id: 1, code: 'timeout', message: 'm', character: '', index: -1 }],
+    [{ type: 'reject', id: 1, code: 'encoding', message: 'm', character: 1, index: -1 }],
+    [{ type: 'reject', id: 1, code: 'encoding', message: 'm', character: '', index: 'x' }],
+    [{ type: 'reject', id: 'x', code: 'encoding', message: 'm', character: '', index: -1 }],
+    [{ type: 'reject', id: 1, code: 'encoding' }],
+    [{ type: 'reject', code: 'encoding', message: 'm', character: '', index: -1 }],
     [{ type: 'result', id: 1, exitCode: 0, stdout: '', stderr: '' }],
     [{ type: 'result', id: 'x', exitCode: 0, stdout: '', stderr: '', timings }],
     [{ type: 'result', id: 1, exitCode: '0', stdout: '', stderr: '', timings }],
@@ -115,7 +204,7 @@ describe('isWorkerToMainMessage', () => {
     [{ type: 'result', id: 1, exitCode: 0, asm: 'text', stdout: '', stderr: '', timings }],
     [{ type: 'crash' }],
     [{ type: 'crash', id: 'x', message: 'm' }],
-    [{ type: 'init', module: EMPTY_MODULE }],
+    [{ type: 'init', modules }],
     [{ type: 'nope' }],
   ])('rejects %j', (bad) => {
     expect(isWorkerToMainMessage(bad)).toBe(false);

@@ -59,6 +59,8 @@ jobs:
           files: |
             dist/cc1psx.wasm
             dist/cc1psx.js
+            dist/cccp.wasm
+            dist/cccp.js
             dist/build-info.json
             dist/SHA256SUMS
             build/out/release/*.tar.gz

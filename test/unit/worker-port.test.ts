@@ -29,7 +29,11 @@ describe('attachRuntime', () => {
   it('forwards messages to the runtime and posts the reply', async () => {
     const port = fakePort();
     const handle = vi.fn(() =>
-      Promise.resolve<WorkerToMainMessage>({ type: 'ready', buildId: 'sha256:cardboard' }),
+      Promise.resolve<WorkerToMainMessage>({
+        type: 'ready',
+        buildId: 'sha256:cardboard',
+        preprocessorBuildId: 'sha256:box',
+      }),
     );
     const runtime: WorkerRuntime = { handle };
     attachRuntime(port, runtime);
@@ -38,7 +42,10 @@ describe('attachRuntime', () => {
       expect(port.posted).toHaveLength(1);
     });
     expect(handle).toHaveBeenCalledWith({ type: 'init' });
-    expect(port.posted[0]).toEqual([{ type: 'ready', buildId: 'sha256:cardboard' }, undefined]);
+    expect(port.posted[0]).toEqual([
+      { type: 'ready', buildId: 'sha256:cardboard', preprocessorBuildId: 'sha256:box' },
+      undefined,
+    ]);
   });
 
   it('transfers the assembly buffer with a result', async () => {
@@ -59,6 +66,43 @@ describe('attachRuntime', () => {
       expect(port.posted).toHaveLength(1);
     });
     expect(port.posted[0]?.[1]).toEqual([asm.buffer]);
+  });
+
+  it('transfers the preprocessed buffer too, each buffer once', async () => {
+    const port = fakePort();
+    const asm = new Uint8Array([1, 2, 3]);
+    const preprocessed = new Uint8Array([4, 5]);
+    const result: WorkerToMainMessage = {
+      type: 'result',
+      id: 1,
+      exitCode: 0,
+      asm,
+      preprocessed,
+      stdout: '',
+      stderr: '',
+      timings,
+    };
+    attachRuntime(port, { handle: () => Promise.resolve(result) });
+    port.onmessage?.({ data: {} });
+    await vi.waitFor(() => {
+      expect(port.posted).toHaveLength(1);
+    });
+    expect(port.posted[0]?.[1]).toEqual([asm.buffer, preprocessed.buffer]);
+
+    // Only the preprocessor output (a failed preprocess), and views sharing one buffer.
+    const shared = new Uint8Array([7, 8, 9]);
+    for (const message of [
+      { ...result, asm: undefined, preprocessed },
+      { ...result, asm: shared, preprocessed: shared.subarray(0, 1) },
+    ]) {
+      const p = fakePort();
+      attachRuntime(p, { handle: () => Promise.resolve(message as WorkerToMainMessage) });
+      p.onmessage?.({ data: {} });
+      await vi.waitFor(() => {
+        expect(p.posted).toHaveLength(1);
+      });
+      expect(p.posted[0]?.[1]).toHaveLength(1);
+    }
   });
 
   it('does not transfer anything for a result without output', async () => {
@@ -115,14 +159,16 @@ describe('attachRuntime', () => {
     const handle = vi
       .fn<(m: unknown) => Promise<WorkerToMainMessage>>()
       .mockImplementationOnce(() => first.promise)
-      .mockImplementationOnce(() => Promise.resolve({ type: 'ready', buildId: 'second' }));
+      .mockImplementationOnce(() =>
+        Promise.resolve({ type: 'ready', buildId: 'second', preprocessorBuildId: 'x' }),
+      );
     attachRuntime(port, { handle });
     port.onmessage?.({ data: 1 });
     port.onmessage?.({ data: 2 });
     await Promise.resolve();
     expect(handle).toHaveBeenCalledTimes(1);
     expect(port.posted).toHaveLength(0);
-    first.resolve({ type: 'ready', buildId: 'first' });
+    first.resolve({ type: 'ready', buildId: 'first', preprocessorBuildId: 'x' });
     await vi.waitFor(() => {
       expect(port.posted).toHaveLength(2);
     });

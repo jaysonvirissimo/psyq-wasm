@@ -16,10 +16,19 @@ try {
     filename: 't01_arith.i',
     rawFlags: ['-O2', '-g0', '-Wall'],
   });
+  // The same unit as raw C through the bundled preprocessor.
+  const raw = new TextDecoder().decode(source).replace(/^# 1 "t01_arith\.c"\n/, '');
+  const fromSource = await compiler.compileSource(raw, {
+    gpSize: 8,
+    filename: 't01_arith.c',
+    rawFlags: ['-O2', '-g0', '-Wall'],
+  });
   window.result = {
     success: result.success,
     buildId: compiler.info.buildId,
     sha256: result.asm === undefined ? null : await sha256Hex(result.asm),
+    sourceSuccess: fromSource.success,
+    sourceSha256: fromSource.asm === undefined ? null : await sha256Hex(fromSource.asm),
   };
   compiler.dispose();
 } catch (err) {

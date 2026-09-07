@@ -1,6 +1,6 @@
 {
   "name": "psyq-wasm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "PsyQ 4.4 cc1psx (GCC 2.8.1, mips-psx) compiled to WebAssembly, for byte-exact PlayStation 1 matching-decompilation tooling in the browser and Node.js",
   "keywords": [
     "psyq",
@@ -47,6 +47,7 @@
     "./worker": "./dist/worker.js",
     "./worker.node": "./dist/worker.node.js",
     "./cc1psx.wasm": "./dist/cc1psx.wasm",
+    "./cccp.wasm": "./dist/cccp.wasm",
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -8,7 +8,10 @@ export interface Platform {
   /** URL that relative overrides are resolved against (the entry module's own URL). */
   readonly baseUrl: URL;
   defaultWorkerUrl(): URL;
+  /** The compiler, `cc1psx.wasm`. */
   defaultWasmUrl(): URL;
+  /** The preprocessor, `cccp.wasm`. */
+  defaultPreprocessorWasmUrl(): URL;
   loadModule(url: URL): Promise<WebAssembly.Module>;
   /** `undefined` means "the package's own worker", letting bundlers see the literal reference. */
   spawnWorker(url: URL | undefined): WorkerHandle;
@@ -26,22 +29,31 @@ export async function createCompilerWith(
 ): Promise<Compiler> {
   const limits = resolveLimits(options?.limits);
   const wasmUrl = resolveUrl(options?.wasmUrl, () => platform.defaultWasmUrl(), platform.baseUrl);
+  const preprocessorWasmUrl = resolveUrl(
+    options?.preprocessorWasmUrl,
+    () => platform.defaultPreprocessorWasmUrl(),
+    platform.baseUrl,
+  );
   const workerUrl =
     options?.workerUrl === undefined
       ? undefined
       : resolveUrl(options.workerUrl, () => platform.defaultWorkerUrl(), platform.baseUrl);
 
-  const module = await platform.loadModule(wasmUrl);
+  const [cc1, cccp] = await Promise.all([
+    platform.loadModule(wasmUrl),
+    platform.loadModule(preprocessorWasmUrl),
+  ]);
   const controller = new CompilerController({
-    module,
+    modules: { cc1, cccp },
     limits,
     spawnWorker: () => platform.spawnWorker(workerUrl),
   });
-  const buildId = await controller.start();
+  const info = await controller.start();
 
   return {
-    info: Object.freeze({ psyqVersion: '4.4', gccVersion: '2.8.1', buildId }),
+    info,
     compilePreprocessed: (source, compileOptions) => controller.compile(source, compileOptions),
+    compileSource: (source, sourceOptions) => controller.compileSource(source, sourceOptions),
     dispose: () => {
       controller.dispose();
     },

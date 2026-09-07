@@ -73,6 +73,7 @@ export function createBrowserPlatform(deps: BrowserPlatformDeps = {}): Platform 
     baseUrl: new URL(import.meta.url),
     defaultWorkerUrl: () => new URL('./worker.js', import.meta.url),
     defaultWasmUrl: () => new URL('./cc1psx.wasm', import.meta.url),
+    defaultPreprocessorWasmUrl: () => new URL('./cccp.wasm', import.meta.url),
     loadModule: (url) => loadWasmModule(url, fetchFn === undefined ? {} : { fetch: fetchFn }),
     spawnWorker: (url) =>
       wrap(url === undefined ? spawnDefault() : new WorkerCtor(url, { type: 'module' })),

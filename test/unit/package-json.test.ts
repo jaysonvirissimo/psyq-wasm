@@ -46,6 +46,7 @@ describe('package.json', () => {
     expect(pkg.exports['./worker']).toBe('./dist/worker.js');
     expect(pkg.exports['./worker.node']).toBe('./dist/worker.node.js');
     expect(pkg.exports['./cc1psx.wasm']).toBe('./dist/cc1psx.wasm');
+    expect(pkg.exports['./cccp.wasm']).toBe('./dist/cccp.wasm');
     expect(pkg.exports['./package.json']).toBe('./package.json');
   });
 

@@ -59,7 +59,14 @@ async function freePort() {
 
 // ---------------------------------------------------------------------------
 step('build check');
-for (const rel of ['dist/cc1psx.wasm', 'dist/cc1psx.js', 'dist/index.js', 'dist/index.node.js']) {
+for (const rel of [
+  'dist/cc1psx.wasm',
+  'dist/cc1psx.js',
+  'dist/cccp.wasm',
+  'dist/cccp.js',
+  'dist/index.js',
+  'dist/index.node.js',
+]) {
   assert(existsSync(join(ROOT, rel)), `${rel} exists (run npm run build first)`);
 }
 
@@ -74,6 +81,8 @@ console.log(`packed ${packJson[0].filename} (${String(files.length)} files)`);
 for (const required of [
   'dist/cc1psx.wasm',
   'dist/cc1psx.js',
+  'dist/cccp.wasm',
+  'dist/cccp.js',
   'dist/worker.js',
   'dist/worker.node.js',
   'dist/index.js',
@@ -150,10 +159,7 @@ if (skipVite) {
   const assets = execFileSync('find', [join(viteApp, 'dist'), '-type', 'f'], { encoding: 'utf8' })
     .trim()
     .split('\n');
-  assert(
-    assets.some((a) => a.endsWith('.wasm')),
-    'vite emitted the wasm asset',
-  );
+  assert(assets.filter((a) => a.endsWith('.wasm')).length >= 2, 'vite emitted both wasm assets');
   assert(
     assets.filter((a) => a.endsWith('.js')).length >= 2,
     'vite emitted a separate worker chunk',
@@ -189,6 +195,11 @@ if (skipVite) {
       const { createHash } = await import('node:crypto');
       assert(errors.length === 0, `no page errors (${errors.join('; ')})`);
       assert(result.success === true, 'vite consumer compile succeeded');
+      assert(result.sourceSuccess === true, 'vite consumer compileSource succeeded');
+      assert(
+        result.sourceSha256 === createHash('sha256').update(expected).digest('hex'),
+        'vite consumer compileSource output is byte-exact',
+      );
       assert(
         result.sha256 === createHash('sha256').update(expected).digest('hex'),
         'vite consumer output is byte-exact',

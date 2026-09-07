@@ -1,5 +1,5 @@
 {
-  "$comment": "One entry per (input, options, expected output) tuple. See README.md.",
+  "$comment": "fixtures: one entry per (preprocessed input, options, expected output) tuple for compilePreprocessed(); sources: one entry per raw-C pipeline case for compileSource(). See README.md.",
   "fixtures": [
     {
       "name": "t01_arith-g8",
@@ -461,6 +461,218 @@
       "expected": "expected/g0/t17_error.s",
       "expectedStderr": "expected/g0/t17_error.err",
       "expectedExitCode": 33
+    },
+    {
+      "name": "t18_include-g8",
+      "input": "src/t18_include.i",
+      "filename": "t18_include.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t18_include.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t18_include-g0",
+      "input": "src/t18_include.i",
+      "filename": "t18_include.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t18_include.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t19_macros-g8",
+      "input": "src/t19_macros.i",
+      "filename": "t19_macros.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t19_macros.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t19_macros-g0",
+      "input": "src/t19_macros.i",
+      "filename": "t19_macros.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t19_macros.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t20_eucjp-g8",
+      "input": "src/t20_eucjp.i",
+      "filename": "t20_eucjp.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t20_eucjp.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t20_eucjp-g0",
+      "input": "src/t20_eucjp.i",
+      "filename": "t20_eucjp.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t20_eucjp.s",
+      "expectedExitCode": 0
+    }
+  ],
+  "sources": [
+    {
+      "name": "t18_include-src-g8",
+      "source": "src/t18_include.c",
+      "filename": "t18_include.c",
+      "headers": {
+        "t18_include.h": "src/t18_include.h",
+        "include/codec.h": "include/codec.h",
+        "include/codec/freq.h": "include/codec/freq.h"
+      },
+      "extraCppFlags": [
+        "-Iinclude"
+      ],
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t18_include.i",
+      "expected": "expected/g8/t18_include.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t19_macros-src-g8",
+      "source": "src/t19_macros.c",
+      "filename": "t19_macros.c",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t19_macros.i",
+      "expected": "expected/g8/t19_macros.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t20_eucjp-src-g8",
+      "source": "src/t20_eucjp.c",
+      "filename": "t20_eucjp.c",
+      "encoding": "eucjp",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t20_eucjp.i",
+      "expected": "expected/g8/t20_eucjp.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t21_cpperror-src-g8",
+      "source": "src/t21_cpperror.c",
+      "filename": "t21_cpperror.c",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t21_cpperror.i",
+      "expectedStderr": "expected/pp/t21_cpperror.err",
+      "expectedExitCode": 33,
+      "expectedStage": "preprocess"
+    },
+    {
+      "name": "t18_include-src-g0",
+      "source": "src/t18_include.c",
+      "filename": "t18_include.c",
+      "headers": {
+        "t18_include.h": "src/t18_include.h",
+        "include/codec.h": "include/codec.h",
+        "include/codec/freq.h": "include/codec/freq.h"
+      },
+      "extraCppFlags": [
+        "-Iinclude"
+      ],
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t18_include.i",
+      "expected": "expected/g0/t18_include.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t19_macros-src-g0",
+      "source": "src/t19_macros.c",
+      "filename": "t19_macros.c",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t19_macros.i",
+      "expected": "expected/g0/t19_macros.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t20_eucjp-src-g0",
+      "source": "src/t20_eucjp.c",
+      "filename": "t20_eucjp.c",
+      "encoding": "eucjp",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t20_eucjp.i",
+      "expected": "expected/g0/t20_eucjp.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t21_cpperror-src-g0",
+      "source": "src/t21_cpperror.c",
+      "filename": "t21_cpperror.c",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expectedPreprocessed": "src/t21_cpperror.i",
+      "expectedStderr": "expected/pp/t21_cpperror.err",
+      "expectedExitCode": 33,
+      "expectedStage": "preprocess"
     }
   ]
 }

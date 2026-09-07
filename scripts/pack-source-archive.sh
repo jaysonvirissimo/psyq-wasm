@@ -45,7 +45,7 @@ git -C "$VENDOR_DIR" archive --format=tar "$HOMEBREW_PSYQ_SHA" | tar -xf - -C "$
 printf '%s\n%s\n' "$HOMEBREW_PSYQ_SHA" "$GCC_TREE_SHA" >"$STAGE/psyq-wasm/build/source-pins.txt"
 
 cat >"$STAGE/README.txt" <<EOF
-psyq-wasm $VERSION -- corresponding source for dist/cc1psx.wasm and dist/cc1psx.js
+psyq-wasm $VERSION -- corresponding source for dist/cc1psx.{wasm,js} and dist/cccp.{wasm,js}
 
 psyq-wasm/build/vendor/homebrew-psyq/  GCC 2.8.1 / PsyQ 4.4 sources
 Commit: $HOMEBREW_PSYQ_SHA; tree: $GCC_TREE_SHA
@@ -61,7 +61,8 @@ Requires Bash and Docker, using $EMSDK_IMAGE on $EMSDK_PLATFORM.
 Docker may download the pinned toolchain image if it is not cached. Compilation
 runs with networking disabled. Git, npm, and a separate checkout are not needed.
 The build validates source checksums and pins before starting Docker.
-Outputs: psyq-wasm/dist/cc1psx.wasm, cc1psx.js, build-info.json, SHA256SUMS.
+Outputs: psyq-wasm/dist/cc1psx.wasm, cc1psx.js, cccp.wasm, cccp.js, build-info.json,
+SHA256SUMS.
 
 EOF
 

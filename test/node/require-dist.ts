@@ -7,6 +7,8 @@ import { fromRoot } from '../helpers/paths.js';
 const required = [
   'dist/cc1psx.wasm',
   'dist/cc1psx.js',
+  'dist/cccp.wasm',
+  'dist/cccp.js',
   'dist/index.node.js',
   'dist/worker.node.js',
 ];

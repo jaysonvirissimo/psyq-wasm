@@ -22,6 +22,15 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
  * @property {string} [gccTreeSha]
  * @property {string} [cflags]
  * @property {string} [ldflags]
+ * @property {PreprocessorBuildInfo} [preprocessor]
+ */
+
+/**
+ * @typedef {object} PreprocessorBuildInfo
+ * @property {string} [buildId]
+ * @property {string} [wasmSha256]
+ * @property {string} [ldflags]
+ * @property {number} [objects]
  */
 
 /**
@@ -76,6 +85,8 @@ export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
     'CC1_WASM_CFLAGS',
     'CC1_WASM_LDFLAGS',
     'CC1_VERSION_BANNER',
+    'CCCP_WASM_LDFLAGS',
+    'CPP_VERSION_BANNER',
   ]) {
     mustContain(key);
   }
@@ -96,6 +107,17 @@ export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
     expect('ldflags', 'CC1_WASM_LDFLAGS');
     if (buildInfo.buildId !== `sha256:${String(buildInfo.wasmSha256).slice(0, 16)}`) {
       problems.push('build-info.json buildId is not derived from wasmSha256');
+    }
+    const pre = buildInfo.preprocessor ?? {};
+    if (pre.ldflags !== pins.get('CCCP_WASM_LDFLAGS')) {
+      problems.push(
+        `build-info.json preprocessor.ldflags=${String(pre.ldflags)} differs from pins CCCP_WASM_LDFLAGS=${String(pins.get('CCCP_WASM_LDFLAGS'))}`,
+      );
+    }
+    if (pre.buildId !== `sha256:${String(pre.wasmSha256).slice(0, 16)}`) {
+      problems.push(
+        'build-info.json preprocessor.buildId is not derived from preprocessor.wasmSha256',
+      );
     }
   }
   if (tag !== undefined && `v${packageVersion}` !== tag) {

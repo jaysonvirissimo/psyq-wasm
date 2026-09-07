@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: MIT
 import { parseDiagnostics } from './diagnostics.js';
+import type { FailedStage } from './protocol.js';
 import type { CompileResult, CompileTimings, CompilerInfo } from './public-types.js';
 
 /** What the worker reports back for one compile. */
 export interface WorkerCompileOutcome {
   readonly exitCode: number;
   readonly asm?: Uint8Array;
+  readonly preprocessed?: Uint8Array;
+  readonly stage?: FailedStage;
   readonly stdout: string;
   readonly stderr: string;
   readonly timings: CompileTimings;
@@ -29,6 +32,7 @@ export function buildCompileResult(
     rawStderr: outcome.stderr,
     compiler,
     timings: outcome.timings,
+    ...(outcome.preprocessed === undefined ? {} : { preprocessed: outcome.preprocessed }),
   };
   if (outcome.exitCode === 0 && outcome.asm !== undefined) {
     return {
@@ -39,14 +43,12 @@ export function buildCompileResult(
       ...common,
     };
   }
-  if (outcome.asm === undefined) {
-    return { success: false, exitCode: outcome.exitCode, ...common };
-  }
-  return {
-    success: false,
+  const failure = {
+    success: false as const,
     exitCode: outcome.exitCode,
-    asm: outcome.asm,
-    text: toText(outcome.asm),
     ...common,
+    ...(outcome.stage === undefined ? {} : { stage: outcome.stage }),
   };
+  if (outcome.asm === undefined) return failure;
+  return { ...failure, asm: outcome.asm, text: toText(outcome.asm) };
 }

@@ -34,6 +34,9 @@ describe('createNodePlatform', () => {
     expect(platform.defaultWasmUrl().href).toBe(
       'file:///opt/app/node_modules/psyq-wasm/dist/cc1psx.wasm',
     );
+    expect(platform.defaultPreprocessorWasmUrl().href).toBe(
+      'file:///opt/app/node_modules/psyq-wasm/dist/cccp.wasm',
+    );
     expect(platform.baseUrl.href).toBe('file:///opt/app/node_modules/psyq-wasm/dist/index.node.js');
   });
 
@@ -62,23 +65,26 @@ describe('createNodePlatform', () => {
     handle.onError(onError);
     handle.onExit(onExit);
 
-    worker.emit('message', { type: 'ready', buildId: 'x' });
+    worker.emit('message', { type: 'ready', buildId: 'x', preprocessorBuildId: 'y' });
     worker.emit('error', new Error('boom'));
     worker.emit('exit', 3);
-    expect(onMessage).toHaveBeenCalledWith({ type: 'ready', buildId: 'x' });
+    expect(onMessage).toHaveBeenCalledWith({
+      type: 'ready',
+      buildId: 'x',
+      preprocessorBuildId: 'y',
+    });
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(onExit).toHaveBeenCalledWith(3);
 
     const transfer = [new ArrayBuffer(2)];
-    handle.postMessage(
-      { type: 'init', module: new WebAssembly.Module(EMPTY_MODULE_BYTES) },
-      transfer,
-    );
+    const module = new WebAssembly.Module(EMPTY_MODULE_BYTES);
+    const modules = { cc1: module, cccp: module };
+    handle.postMessage({ type: 'init', modules }, transfer);
     expect(worker.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'init' }),
       transfer,
     );
-    handle.postMessage({ type: 'init', module: new WebAssembly.Module(EMPTY_MODULE_BYTES) });
+    handle.postMessage({ type: 'init', modules });
     expect(worker.postMessage).toHaveBeenLastCalledWith(
       expect.objectContaining({ type: 'init' }),
       undefined,
@@ -92,6 +98,7 @@ describe('createNodePlatform', () => {
     const real = createNodePlatform();
     expect(real.defaultWorkerUrl().pathname.endsWith('/worker.node.js')).toBe(true);
     expect(real.defaultWasmUrl().pathname.endsWith('/cc1psx.wasm')).toBe(true);
+    expect(real.defaultPreprocessorWasmUrl().pathname.endsWith('/cccp.wasm')).toBe(true);
     expect(real.baseUrl.protocol).toBe('file:');
   });
 });

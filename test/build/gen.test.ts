@@ -14,6 +14,7 @@ export const GENERATED_FILES = [
   'c-gperf.h',
   'c-parse.c',
   'c-parse.h',
+  'cexp.c',
   'config.h',
   'hconfig.h',
   'insn-attr.h',

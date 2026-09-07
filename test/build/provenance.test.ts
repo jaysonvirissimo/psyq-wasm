@@ -7,10 +7,13 @@ import { fromRoot } from '../helpers/paths.js';
 
 const provenance = readFileSync(fromRoot('PROVENANCE.md'), 'utf8');
 const pins = parsePins(readFileSync(fromRoot('build', 'pins.env'), 'utf8'));
+const { version } = JSON.parse(readFileSync(fromRoot('package.json'), 'utf8')) as {
+  version: string;
+};
 
 describe('PROVENANCE.md', () => {
   it('records every pinned build input', () => {
-    expect(verify({ provenance, pins, packageVersion: '0.1.0' })).toEqual([]);
+    expect(verify({ provenance, pins, packageVersion: version })).toEqual([]);
   });
 
   it('documents the required sections', () => {
@@ -32,7 +35,7 @@ describe('PROVENANCE.md', () => {
     const path = fromRoot('dist', 'build-info.json');
     if (!existsSync(path)) return;
     const buildInfo = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-    expect(verify({ provenance, pins, buildInfo, packageVersion: '0.1.0' })).toEqual([]);
+    expect(verify({ provenance, pins, buildInfo, packageVersion: version })).toEqual([]);
   });
 });
 
@@ -52,19 +55,28 @@ describe('verify-provenance', () => {
         ldflags: pins.get('CC1_WASM_LDFLAGS') ?? '',
         buildId: 'sha256:0000000000000000',
         wasmSha256: 'abcdef',
+        preprocessor: {
+          buildId: 'sha256:0123456789abcdef',
+          wasmSha256: 'fedcba',
+          ldflags: 'nonsense',
+          objects: 5,
+        },
       },
-      packageVersion: '0.1.0',
-      tag: 'v0.2.0',
+      packageVersion: version,
+      tag: 'v9.9.9',
     });
     expect(problems).toEqual([
       'PROVENANCE.md does not mention EMSDK_IMAGE=emscripten/emsdk:0.0.1',
       'build-info.json emsdkImage=emscripten/emsdk:6.0.9 differs from pins EMSDK_IMAGE=emscripten/emsdk:0.0.1',
       'build-info.json buildId is not derived from wasmSha256',
-      'package.json version 0.1.0 does not match tag v0.2.0',
+      'build-info.json preprocessor.ldflags=nonsense differs from pins CCCP_WASM_LDFLAGS=' +
+        String(pins.get('CCCP_WASM_LDFLAGS')),
+      'build-info.json preprocessor.buildId is not derived from preprocessor.wasmSha256',
+      `package.json version ${version} does not match tag v9.9.9`,
     ]);
     const missing = new Map(pins);
     missing.delete('GCC_TREE_SHA');
-    expect(verify({ provenance, pins: missing, packageVersion: '0.1.0' })).toEqual([
+    expect(verify({ provenance, pins: missing, packageVersion: version })).toEqual([
       'pins.env is missing GCC_TREE_SHA',
     ]);
   });

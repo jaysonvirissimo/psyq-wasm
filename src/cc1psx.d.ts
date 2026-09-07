@@ -26,6 +26,8 @@ export type InstantiateWasm = (
 
 export interface Cc1ModuleOptions {
   instantiateWasm?: InstantiateWasm;
+  /** argv[0]; GCC prints its basename in front of program-level diagnostics. */
+  thisProgram?: string;
   print?: (line: string) => void;
   printErr?: (line: string) => void;
   preRun?: ((module: Cc1Module) => void)[];

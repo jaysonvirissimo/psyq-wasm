@@ -30,6 +30,7 @@ const MIME = {
   '.i': 'text/plain; charset=utf-8',
   '.s': 'text/plain; charset=utf-8',
   '.c': 'text/plain; charset=utf-8',
+  '.h': 'text/plain; charset=utf-8',
   '.err': 'text/plain; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
 };

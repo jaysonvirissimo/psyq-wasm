@@ -5,9 +5,10 @@
  *
  *   node scripts/gen-stress-fixture.mjs [functions] > codec.i
  *
- * Also importable: `import { generate } from './gen-stress-fixture.mjs'`.
+ * Also importable: `import { generate } from './gen-stress-fixture.mjs'`, in
+ * browsers too (the test harness page uses it), so nothing Node-specific may be
+ * imported statically.
  */
-import { pathToFileURL } from 'node:url';
 
 const CASES = 32;
 
@@ -37,7 +38,7 @@ export function generate(n) {
 const invokedDirectly =
   typeof process !== 'undefined' &&
   process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  import.meta.url === (await import('node:url')).pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   const n = Number(process.argv[2] ?? '3000');

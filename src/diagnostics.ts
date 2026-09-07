@@ -7,8 +7,12 @@ import type { CompilerDiagnostic } from './public-types.js';
  * contain colons (drive letters), so the match is anchored on `:<digits>: `.
  */
 const LOCATED = /^(?<file>.+?):(?<line>\d+): (?:(?<warn>warning): )?(?<msg>.*)$/;
-/** Messages from the compiler driver level, e.g. `cc1: warning: …`. */
-const DRIVER = /^cc1: (?:(?<warn>warning): )?(?<msg>.*)$/;
+/**
+ * Messages from the program level, e.g. `cc1psx: warning: …`. The name is
+ * argv[0]'s basename: `cc1psx` and `cccp` as the wrapper runs them, `cc1` in
+ * a plain GCC build.
+ */
+const DRIVER = /^(?:cc1|cc1psx|cccp): (?:(?<warn>warning): )?(?<msg>.*)$/;
 
 const CONTEXT_PATTERNS: readonly RegExp[] = [
   /^(?:.+: )?In function `.*':$/,

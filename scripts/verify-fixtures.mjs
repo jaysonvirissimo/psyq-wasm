@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export function verifyFixtures(fixtures, generated, compareBytes = true) {
-  const { fixtures: manifest } = JSON.parse(readFileSync(join(fixtures, 'manifest.json'), 'utf8'));
+  const { fixtures: manifest, sources = [] } = JSON.parse(
+    readFileSync(join(fixtures, 'manifest.json'), 'utf8'),
+  );
   const exits = new Map(
     readFileSync(join(generated, 'exit-codes.txt'), 'utf8')
       .trim()
@@ -16,6 +18,17 @@ export function verifyFixtures(fixtures, generated, compareBytes = true) {
       }),
   );
   const problems = [];
+  const same = (a, b) => readFileSync(a).equals(readFileSync(b));
+  /** Compare one expected file (or its absence) with the generated output. */
+  const compareOutput = (name, expected, actualPath, what) => {
+    if (expected === undefined) {
+      if (existsSync(actualPath)) problems.push(`${name}: unexpected ${what} output`);
+    } else if (!existsSync(actualPath)) {
+      problems.push(`${name}: missing ${what} output`);
+    } else if (compareBytes && !same(actualPath, join(fixtures, expected))) {
+      problems.push(`${name}: ${what} bytes differ`);
+    }
+  };
   for (const fixture of manifest) {
     const base = fixture.filename.replace(/\.i$/, '');
     const variant = fixture.rawFlags.includes('-g') ? 'g' : `g${fixture.gpSize}`;
@@ -25,26 +38,33 @@ export function verifyFixtures(fixtures, generated, compareBytes = true) {
       ['expected', 's'],
       ['expectedStderr', 'err'],
     ]) {
-      const actualPath = join(generated, 'expected', variant, `${base}.${extension}`);
-      if (fixture[field] === undefined) {
-        if (existsSync(actualPath))
-          problems.push(`${fixture.name}: unexpected ${extension} output`);
-      } else if (!existsSync(actualPath)) {
-        problems.push(`${fixture.name}: missing ${extension} output`);
-      } else if (
-        compareBytes &&
-        !readFileSync(actualPath).equals(readFileSync(join(fixtures, fixture[field])))
-      ) {
-        problems.push(`${fixture.name}: ${extension} bytes differ`);
-      }
+      compareOutput(
+        fixture.name,
+        fixture[field],
+        join(generated, 'expected', variant, `${base}.${extension}`),
+        extension,
+      );
     }
-    if (
-      compareBytes &&
-      !readFileSync(join(generated, fixture.input)).equals(
-        readFileSync(join(fixtures, fixture.input)),
-      )
-    )
+    if (compareBytes && !same(join(generated, fixture.input), join(fixtures, fixture.input)))
       problems.push(`${fixture.name}: preprocessed input differs`);
+  }
+  for (const source of sources) {
+    const base = source.filename.replace(/\.c$/, '');
+    const failedPreprocess = source.expectedStage === 'preprocess';
+    if (exits.get(`${base}/pp`) !== (failedPreprocess ? source.expectedExitCode : 0))
+      problems.push(`${source.name}: preprocess exit status differs`);
+    compareOutput(
+      source.name,
+      failedPreprocess ? source.expectedStderr : undefined,
+      join(generated, 'expected', 'pp', `${base}.err`),
+      'preprocess err',
+    );
+    compareOutput(
+      source.name,
+      source.expectedPreprocessed,
+      join(generated, 'src', `${base}.i`),
+      'preprocessed',
+    );
   }
   if (
     compareBytes &&

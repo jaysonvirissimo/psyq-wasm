@@ -27,7 +27,9 @@ docker run --rm -i \
   -e SLINK_PACKAGES="$SLINK_PACKAGES" \
   -e GCC_SUBDIR="$GCC_SUBDIR" \
   -e CC1_VERSION_BANNER="$CC1_VERSION_BANNER" \
+  -e CPP_VERSION_BANNER="${CPP_VERSION_BANNER:-}" \
   "$SLINK_IMAGE" sh /build/slink/inside.sh
 
 log "reference cc1psx: $RESULT_DIR/cc1psx ($(sha256_file "$RESULT_DIR/cc1psx"))"
+log "reference cccp: $RESULT_DIR/cccp ($(sha256_file "$RESULT_DIR/cccp"))"
 log "generated sources: $RESULT_DIR/gen"

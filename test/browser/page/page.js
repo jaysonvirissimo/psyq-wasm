@@ -6,6 +6,14 @@ import { generate } from '../../../scripts/gen-stress-fixture.mjs';
 
 const log = document.getElementById('log');
 
+/** Load a `headers` map for compileSource() from fixture files. */
+async function fetchHeaders(map) {
+  const entries = await Promise.all(
+    Object.entries(map).map(async ([path, file]) => [path, await fetchFixture(file)]),
+  );
+  return Object.fromEntries(entries);
+}
+
 /** Fetch a fixture file relative to test/fixtures as bytes. */
 async function fetchFixture(relative) {
   const response = await fetch(`/test/fixtures/${relative}`);
@@ -25,6 +33,9 @@ async function summarize(result) {
     exitCode: result.exitCode,
     asmSha256: result.asm === undefined ? null : await sha256Hex(result.asm),
     asmLength: result.asm === undefined ? null : result.asm.length,
+    preprocessedSha256:
+      result.preprocessed === undefined ? null : await sha256Hex(result.preprocessed),
+    stage: result.stage ?? null,
     textHasCr: result.text === undefined ? null : result.text.includes('\r'),
     diagnostics: result.diagnostics,
     rawStderr: result.rawStderr,
@@ -45,6 +56,7 @@ function describeError(err) {
 window.psyq = {
   ...psyq,
   fetchFixture,
+  fetchHeaders,
   sha256Hex,
   summarize,
   describeError,

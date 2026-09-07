@@ -11,14 +11,49 @@
       <h1>psyq-wasm</h1>
       <p>
         PsyQ 4.4 <code>cc1psx</code> (GCC 2.8.1, <code>mips-psx</code>) running as WebAssembly in
-        this page. Paste <em>preprocessed</em> C and compile; nothing leaves your browser.
+        this page, with the matching <code>cccp</code> preprocessor. Paste C (or already
+        preprocessed C) and compile; nothing leaves your browser.
       </p>
     </header>
 
     <main>
       <section class="pane">
-        <label for="source">Preprocessed C (<code>.i</code>)</label>
+        <div class="controls">
+          <fieldset>
+            <legend>Input</legend>
+            <label
+              ><input type="radio" name="mode" value="source" checked /> C source
+              (<code>.c</code>)</label
+            >
+            <label
+              ><input type="radio" name="mode" value="preprocessed" /> preprocessed
+              (<code>.i</code>)</label
+            >
+          </fieldset>
+        </div>
+        <label for="source" id="source-label">C source (<code>.c</code>)</label>
         <textarea id="source" spellcheck="false"></textarea>
+        <div class="controls source-only">
+          <label class="flags">
+            Preprocessor flags
+            <input id="cppflags" type="text" spellcheck="false" />
+          </label>
+          <label class="flags">
+            Encoding
+            <select id="encoding">
+              <option value="utf8">utf8 (pass through)</option>
+              <option value="eucjp">eucjp (re-encode before compiling)</option>
+            </select>
+          </label>
+        </div>
+        <details class="source-only">
+          <summary>Virtual header (optional)</summary>
+          <label class="flags">
+            Path
+            <input id="header-path" type="text" value="codec.h" spellcheck="false" />
+          </label>
+          <textarea id="header" spellcheck="false" rows="4"></textarea>
+        </details>
         <div class="controls">
           <fieldset>
             <legend>Small data (<code>-G</code>)</legend>
@@ -31,7 +66,7 @@
           </label>
           <label class="flags">
             Filename
-            <input id="filename" type="text" value="input.i" spellcheck="false" />
+            <input id="filename" type="text" value="input.c" spellcheck="false" />
           </label>
           <button id="compile" type="button" disabled>Compile</button>
           <button id="cancel" type="button" disabled>Cancel</button>

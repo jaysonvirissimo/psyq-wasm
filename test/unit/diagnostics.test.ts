@@ -66,6 +66,28 @@ describe('parseDiagnostics', () => {
     ]);
   });
 
+  it('accepts the program names the reference and the preprocessor print', () => {
+    expect(
+      parseDiagnostics(
+        'cc1psx: warning: -Wuninitialized is not supported without -O\ncccp: Usage: cccp [switches] input output\n',
+      ),
+    ).toEqual([
+      { severity: 'warning', message: '-Wuninitialized is not supported without -O' },
+      { severity: 'error', message: 'Usage: cccp [switches] input output' },
+    ]);
+  });
+
+  it('parses a preprocessor #error as a located error', () => {
+    expect(parseDiagnostics('t21_cpperror.c:9: #error shadow moses codec unavailable\n')).toEqual([
+      {
+        severity: 'error',
+        file: 't21_cpperror.c',
+        line: 9,
+        message: '#error shadow moses codec unavailable',
+      },
+    ]);
+  });
+
   it('ignores context lines and unrelated chatter', () => {
     const stderr =
       "meiling.c: In function `save':\n" +

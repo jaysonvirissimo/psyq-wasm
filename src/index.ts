@@ -10,6 +10,7 @@ export type {
   CompileFailure,
   CompilePreprocessedOptions,
   CompileResult,
+  CompileSourceOptions,
   CompileSuccess,
   CompileTimings,
   Compiler,
@@ -18,10 +19,12 @@ export type {
   CompilerLimits,
   CreateCompilerOptions,
   ErrorCode,
+  SourceEncoding,
 } from './public-types.js';
 export {
   CompileTimeoutError,
   CompilerDisposedError,
+  EncodingError,
   InternalError,
   InvalidOptionsError,
   PsyqWasmError,
@@ -29,10 +32,12 @@ export {
   isAbortError,
 } from './errors.js';
 export { DEFAULT_LIMITS } from './options.js';
+export { DEFAULT_CPP_FLAGS } from './argv.js';
 export { parseDiagnostics } from './diagnostics.js';
+export { encodeEucJp } from './eucjp.js';
 
 /**
- * Fetch and compile the compiler module once, then start a worker.
+ * Fetch and compile the compiler and preprocessor modules once, then start a worker.
  *
  * @param options asset URL and limit overrides
  * @param platform host bindings; only tests should pass this

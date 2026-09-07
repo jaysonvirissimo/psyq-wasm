@@ -13,3 +13,4 @@ test-results/
 package-lock.json
 CHANGELOG.md
 docs/
+src/eucjp-table.ts

@@ -8,7 +8,12 @@ import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generate } from '../../scripts/gen-stress-fixture.mjs';
 import type * as Api from '../../src/index.node.js';
-import { readFixture, readFixtureText } from '../helpers/fixtures.js';
+import {
+  loadManifest,
+  loadSourceHeaders,
+  readFixture,
+  readFixtureText,
+} from '../helpers/fixtures.js';
 import { fromRoot } from '../helpers/paths.js';
 
 type NodeApi = typeof Api;
@@ -16,6 +21,7 @@ type NodeApi = typeof Api;
 const api = (await import(pathToFileURL(fromRoot('dist', 'index.node.js')).href)) as NodeApi;
 const buildInfo = JSON.parse(readFileSync(fromRoot('dist', 'build-info.json'), 'utf8')) as {
   buildId: string;
+  preprocessor: { buildId: string };
 };
 const STRESS = new TextEncoder().encode(generate(1500));
 const FLAGS = ['-O2', '-g0', '-Wall'];
@@ -80,8 +86,10 @@ describe('createCompiler (Node)', () => {
       psyqVersion: '4.4',
       gccVersion: '2.8.1',
       buildId: buildInfo.buildId,
+      preprocessorBuildId: buildInfo.preprocessor.buildId,
     });
     expect(compiler.info.buildId).toMatch(/^sha256:[0-9a-f]{16}$/);
+    expect(compiler.info.preprocessorBuildId).toMatch(/^sha256:[0-9a-f]{16}$/);
   });
 
   it('compiles a preprocessed unit to the reference bytes with its warning', async () => {
@@ -177,6 +185,153 @@ describe('createCompiler (Node)', () => {
   });
 });
 
+describe('compileSource (Node)', () => {
+  let compiler: Api.Compiler;
+  const include = loadManifest().sources.find((s) => s.name === 't18_include-src-g8');
+  if (include === undefined) throw new Error('t18_include-src-g8 fixture missing');
+
+  beforeAll(async () => {
+    compiler = await api.createCompiler();
+  });
+
+  afterAll(() => {
+    compiler.dispose();
+  });
+
+  it('preprocesses raw C with virtual headers and compiles it to the reference bytes', async () => {
+    const result = await compiler.compileSource(readFixture(include.source), {
+      gpSize: include.gpSize,
+      filename: include.filename,
+      rawFlags: include.rawFlags,
+      headers: loadSourceHeaders(include),
+      cppFlags: [...api.DEFAULT_CPP_FLAGS, ...(include.extraCppFlags ?? [])],
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('unreachable');
+    expect(
+      Buffer.compare(
+        result.preprocessed ?? new Uint8Array(),
+        readFixture(include.expectedPreprocessed),
+      ),
+    ).toBe(0);
+    expect(Buffer.compare(result.asm, readFixture(include.expected ?? ''))).toBe(0);
+    expect(result.text).toContain('.file\t1 "t18_include.c"');
+    expect(result.timings.preprocessMs).toBeGreaterThan(0);
+    expect(result.timings.totalMs).toBeGreaterThanOrEqual(
+      (result.timings.preprocessMs ?? 0) + result.timings.compileMs,
+    );
+  });
+
+  it('accepts a string and gives the same assembly as the bytes', async () => {
+    const text = readFixtureText('src/t19_macros.c');
+    const options = { gpSize: 0 as const, filename: 't19_macros.c', rawFlags: FLAGS };
+    const fromString = await compiler.compileSource(text, options);
+    const fromBytes = await compiler.compileSource(readFixture('src/t19_macros.c'), options);
+    if (!fromString.success || !fromBytes.success) throw new Error('compile failed');
+    expect(Buffer.compare(fromString.asm, fromBytes.asm)).toBe(0);
+    expect(Buffer.compare(fromString.asm, readFixture('expected/g0/t19_macros.s'))).toBe(0);
+  });
+
+  it('reports a preprocessor error as a failed result at the preprocess stage', async () => {
+    const result = await compiler.compileSource(readFixture('src/t21_cpperror.c'), {
+      gpSize: 8,
+      filename: 't21_cpperror.c',
+      rawFlags: FLAGS,
+    });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('unreachable');
+    expect(result.exitCode).toBe(33);
+    expect(result.stage).toBe('preprocess');
+    expect(result.asm).toBeUndefined();
+    expect(result.preprocessed).toBeDefined();
+    expect(result.diagnostics[0]).toEqual({
+      severity: 'error',
+      file: 't21_cpperror.c',
+      line: 5,
+      message: '#error shadow moses codec unavailable',
+    });
+    expect(result.rawStderr).toBe(readFixtureText('expected/pp/t21_cpperror.err'));
+  });
+
+  it('reports a compile error after successful preprocessing at the compile stage', async () => {
+    const result = await compiler.compileSource('#define FOX 1\nint hound( { }\n', {
+      gpSize: 8,
+      filename: 'hound.c',
+    });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error('unreachable');
+    expect(result.stage).toBe('compile');
+    expect(result.diagnostics[0]).toMatchObject({ severity: 'error', file: 'hound.c', line: 2 });
+    expect(new TextDecoder().decode(result.preprocessed)).toContain('# 1 "hound.c"');
+  });
+
+  it('re-encodes to EUC-JP and rejects unmappable characters, staying healthy', async () => {
+    const result = await compiler.compileSource(readFixture('src/t20_eucjp.c'), {
+      gpSize: 8,
+      filename: 't20_eucjp.c',
+      rawFlags: FLAGS,
+      encoding: 'eucjp',
+    });
+    if (!result.success) throw new Error('compile failed');
+    expect(
+      Buffer.compare(result.preprocessed ?? new Uint8Array(), readFixture('src/t20_eucjp.i')),
+    ).toBe(0);
+    expect(Buffer.compare(result.asm, readFixture('expected/g8/t20_eucjp.s'))).toBe(0);
+
+    const rejected = compiler.compileSource('const char *yen = "¥";\n', {
+      gpSize: 8,
+      encoding: 'eucjp',
+    });
+    await expect(rejected).rejects.toBeInstanceOf(api.EncodingError);
+    await expect(rejected).rejects.toMatchObject({ code: 'encoding', character: '¥' });
+    const after = await compiler.compileSource('int otacon(void) { return 1; }\n', { gpSize: 8 });
+    expect(after.success).toBe(true);
+  });
+
+  it('applies the header limits and flag rules before touching the worker', async () => {
+    await expect(
+      compiler.compileSource('int a;', { gpSize: 8, headers: { '../x.h': '' } }),
+    ).rejects.toBeInstanceOf(api.InvalidOptionsError);
+    await expect(
+      compiler.compileSource('int a;', { gpSize: 8, cppFlags: ['-include', 'x.h'] }),
+    ).rejects.toBeInstanceOf(api.InvalidOptionsError);
+    const many = Object.fromEntries(
+      Array.from({ length: api.DEFAULT_LIMITS.maxHeaderCount + 1 }, (_, i) => [
+        `h${String(i)}.h`,
+        '',
+      ]),
+    );
+    await expect(compiler.compileSource('int a;', { gpSize: 8, headers: many })).rejects.toThrow(
+      /maxHeaderCount/,
+    );
+  });
+
+  it('times out and recovers, then aborts and recovers', async () => {
+    const stress = generate(1500);
+    await expect(
+      compiler.compileSource(stress, { gpSize: 8, rawFlags: FLAGS, timeoutMs: 1 }),
+    ).rejects.toBeInstanceOf(api.CompileTimeoutError);
+    const abort = new AbortController();
+    const pending = compiler.compileSource(stress, {
+      gpSize: 8,
+      rawFlags: FLAGS,
+      signal: abort.signal,
+    });
+    setTimeout(() => {
+      abort.abort();
+    }, 5);
+    await expect(pending).rejects.toSatisfy(api.isAbortError);
+    const after = await compiler.compileSource(readFixture('src/t01_arith.c'), {
+      gpSize: 8,
+      filename: 't01_arith.c',
+      rawFlags: FLAGS,
+    });
+    expect(after.success).toBe(true);
+    if (!after.success) throw new Error('unreachable');
+    expect(Buffer.compare(after.asm, readFixture('expected/g8/t01_arith.s'))).toBe(0);
+  });
+});
+
 describe('dispose', () => {
   it('rejects later compiles with CompilerDisposedError', async () => {
     const compiler = await api.createCompiler();
@@ -203,6 +358,28 @@ describe('asset overrides', () => {
     } finally {
       compiler.dispose();
     }
+  });
+
+  it('accepts an explicit preprocessor URL', async () => {
+    const compiler = await api.createCompiler({
+      preprocessorWasmUrl: new URL('../../dist/cccp.wasm', import.meta.url),
+    });
+    try {
+      const result = await compiler.compileSource('int otacon(void) { return 140; }\n', {
+        gpSize: 8,
+      });
+      expect(result.success).toBe(true);
+    } finally {
+      compiler.dispose();
+    }
+  });
+
+  it('fails clearly when the preprocessor asset is missing', async () => {
+    await expect(
+      api.createCompiler({
+        preprocessorWasmUrl: new URL('../../dist/missing.wasm', import.meta.url),
+      }),
+    ).rejects.toBeInstanceOf(api.InternalError);
   });
 
   it('fails clearly when the wasm asset is missing', async () => {

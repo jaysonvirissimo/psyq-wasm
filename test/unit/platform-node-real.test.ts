@@ -21,10 +21,8 @@ describe('createNodePlatform with the real worker_threads', () => {
     });
     handle.onError(() => undefined);
     // The echo worker ignores the message shape; any structured-cloneable value works.
-    handle.postMessage({
-      type: 'init',
-      module: await WebAssembly.compile(new Uint8Array([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0])),
-    });
+    const module = await WebAssembly.compile(new Uint8Array([0, 0x61, 0x73, 0x6d, 1, 0, 0, 0]));
+    handle.postMessage({ type: 'init', modules: { cc1: module, cccp: module } });
     await expect(echoed).resolves.toMatchObject({ type: 'init' });
     handle.terminate();
     await expect(exited).resolves.toBeTypeOf('number');

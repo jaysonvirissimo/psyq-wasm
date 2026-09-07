@@ -20,6 +20,7 @@ describe('index (browser entry)', () => {
       baseUrl: new URL('https://example.test/dist/index.js'),
       defaultWorkerUrl: () => new URL('https://example.test/dist/worker.js'),
       defaultWasmUrl: () => new URL('https://example.test/dist/cc1psx.wasm'),
+      defaultPreprocessorWasmUrl: () => new URL('https://example.test/dist/cccp.wasm'),
       loadModule: () => Promise.resolve(EMPTY_MODULE),
       spawnWorker: spawn,
     };

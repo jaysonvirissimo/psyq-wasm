@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CompileTimeoutError,
   CompilerDisposedError,
+  EncodingError,
   InternalError,
   InvalidOptionsError,
   PsyqWasmError,
@@ -39,6 +40,19 @@ describe('error hierarchy', () => {
     expect(new CompilerDisposedError().code).toBe('disposed');
     expect(new CompilerDisposedError().name).toBe('CompilerDisposedError');
     expect(new CompilerDisposedError().message).toMatch(/disposed/i);
+  });
+
+  it('EncodingError names the character and its index', () => {
+    const err = new EncodingError('U+00A5 "¥" at line 3 has no EUC-JP mapping.', {
+      character: '¥',
+      index: 140,
+    });
+    expect(err).toBeInstanceOf(PsyqWasmError);
+    expect(err.name).toBe('EncodingError');
+    expect(err.code).toBe('encoding');
+    expect(err.character).toBe('¥');
+    expect(err.index).toBe(140);
+    expect(err.message).toContain('U+00A5');
   });
 
   it('InternalError forwards a cause', () => {

@@ -17,6 +17,9 @@ describe('index.node', () => {
     expect(node.InternalError).toBeTypeOf('function');
     expect(node.InvalidOptionsError).toBeTypeOf('function');
     expect(node.CompilerDisposedError).toBeTypeOf('function');
+    expect(node.EncodingError).toBeTypeOf('function');
+    expect(node.encodeEucJp).toBeTypeOf('function');
+    expect(node.DEFAULT_CPP_FLAGS).toContain('-D_PSYQ');
     expect(node.isAbortError).toBeTypeOf('function');
     expect(node.parseDiagnostics).toBeTypeOf('function');
     expect(node.DEFAULT_LIMITS.maxSourceBytes).toBeGreaterThan(0);
@@ -28,6 +31,7 @@ describe('index.node', () => {
       baseUrl: new URL('file:///pkg/dist/index.node.js'),
       defaultWorkerUrl: () => new URL('file:///pkg/dist/worker.node.js'),
       defaultWasmUrl: () => new URL('file:///pkg/dist/cc1psx.wasm'),
+      defaultPreprocessorWasmUrl: () => new URL('file:///pkg/dist/cccp.wasm'),
       loadModule: () => Promise.resolve(EMPTY_MODULE),
       spawnWorker: spawn,
     };

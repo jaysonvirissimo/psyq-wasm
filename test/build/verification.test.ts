@@ -124,3 +124,76 @@ describe('exported source verification', () => {
     expect(verify()).toBe(1);
   });
 });
+
+describe('isolated verification of source fixtures', () => {
+  function fixtures(): { original: string; generated: string } {
+    const root = directory();
+    const original = join(root, 'original');
+    const generated = join(root, 'generated');
+    mkdirSync(join(original, 'src'), { recursive: true });
+    mkdirSync(join(original, 'expected', 'pp'), { recursive: true });
+    writeFileSync(
+      join(original, 'manifest.json'),
+      JSON.stringify({
+        fixtures: [],
+        sources: [
+          {
+            name: 'codec-g8',
+            source: 'src/codec.c',
+            filename: 'codec.c',
+            gpSize: 8,
+            rawFlags: ['-O2'],
+            expectedPreprocessed: 'src/codec.i',
+            expected: 'expected/g8/codec.s',
+            expectedExitCode: 0,
+          },
+          {
+            name: 'hound-g8',
+            source: 'src/hound.c',
+            filename: 'hound.c',
+            gpSize: 8,
+            rawFlags: ['-O2'],
+            expectedPreprocessed: 'src/hound.i',
+            expectedStderr: 'expected/pp/hound.err',
+            expectedExitCode: 33,
+            expectedStage: 'preprocess',
+          },
+        ],
+      }),
+    );
+    writeFileSync(join(original, 'src', 'codec.i'), '# 1 "codec.c"\nint codec;\n');
+    writeFileSync(join(original, 'src', 'hound.i'), '# 1 "hound.c"\n');
+    writeFileSync(join(original, 'expected', 'pp', 'hound.err'), 'hound.c:1: #error\n');
+    writeFileSync(join(original, 'SHA256SUMS'), 'test inventory\n');
+    cpSync(original, generated, { recursive: true });
+    writeFileSync(join(generated, 'exit-codes.txt'), 'codec pp 0\nhound pp 33\ncodec g8 0\n');
+    return { original, generated };
+  }
+
+  it('accepts matching output and reports each kind of drift', () => {
+    const { original, generated } = fixtures();
+    expect(verifyFixtures(original, generated)).toEqual([]);
+    writeFileSync(join(generated, 'src', 'codec.i'), 'changed');
+    writeFileSync(join(generated, 'expected', 'pp', 'codec.err'), 'codec.c:1: warning\n');
+    writeFileSync(join(generated, 'expected', 'pp', 'hound.err'), 'hound.c:2: #error\n');
+    writeFileSync(join(generated, 'exit-codes.txt'), 'codec pp 33\nhound pp 0\ncodec g8 0\n');
+    writeFileSync(join(generated, 'SHA256SUMS'), 'changed inventory');
+    expect(verifyFixtures(original, generated)).toEqual([
+      'codec-g8: preprocess exit status differs',
+      'codec-g8: unexpected preprocess err output',
+      'codec-g8: preprocessed bytes differ',
+      'hound-g8: preprocess exit status differs',
+      'hound-g8: preprocess err bytes differ',
+      'fixture checksum inventory differs',
+    ]);
+    rmSync(join(generated, 'expected', 'pp', 'hound.err'));
+    rmSync(join(generated, 'src', 'hound.i'));
+    expect(verifyFixtures(original, generated, false)).toEqual([
+      'codec-g8: preprocess exit status differs',
+      'codec-g8: unexpected preprocess err output',
+      'hound-g8: preprocess exit status differs',
+      'hound-g8: missing preprocess err output',
+      'hound-g8: missing preprocessed output',
+    ]);
+  });
+});

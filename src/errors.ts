@@ -47,6 +47,21 @@ export class InvalidOptionsError extends PsyqWasmError {
   }
 }
 
+/** A character in the preprocessed source has no representation in the requested encoding. */
+export class EncodingError extends PsyqWasmError {
+  /** The offending character (one code point). */
+  readonly character: string;
+  /** Code-unit index of that character in the text being encoded. */
+  readonly index: number;
+
+  constructor(message: string, details: { character: string; index: number }) {
+    super('encoding', message);
+    this.name = 'EncodingError';
+    this.character = details.character;
+    this.index = details.index;
+  }
+}
+
 /** The compiler was disposed before or while the request ran. */
 export class CompilerDisposedError extends PsyqWasmError {
   constructor() {

@@ -5,7 +5,12 @@
  */
 import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { loadManifest, readFixture, readFixtureText } from '../helpers/fixtures.js';
+import {
+  loadManifest,
+  readFixture,
+  readFixtureText,
+  type SourceFixtureEntry,
+} from '../helpers/fixtures.js';
 
 const PAGE = '/test/browser/page/';
 const FLAGS = ['-O2', '-g0', '-Wall'];
@@ -15,11 +20,18 @@ interface Summary {
   exitCode: number;
   asmSha256: string | null;
   asmLength: number | null;
+  preprocessedSha256: string | null;
+  stage: 'preprocess' | 'compile' | null;
   textHasCr: boolean | null;
   diagnostics: { severity: string; file?: string; line?: number; message: string }[];
   rawStderr: string;
-  compiler: { psyqVersion: string; gccVersion: string; buildId: string };
-  timings: { instantiateMs: number; compileMs: number; totalMs: number };
+  compiler: {
+    psyqVersion: string;
+    gccVersion: string;
+    buildId: string;
+    preprocessorBuildId: string;
+  };
+  timings: { instantiateMs: number; compileMs: number; totalMs: number; preprocessMs?: number };
 }
 
 interface ErrorSummary {
@@ -34,11 +46,12 @@ function sha256(bytes: Uint8Array): string {
 }
 
 /** Requests for package assets, tracked to prove the module is fetched once. */
-function trackAssets(page: Page): { wasm: string[]; worker: string[] } {
-  const seen = { wasm: [] as string[], worker: [] as string[] };
+function trackAssets(page: Page): { wasm: string[]; cccp: string[]; worker: string[] } {
+  const seen = { wasm: [] as string[], cccp: [] as string[], worker: [] as string[] };
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (url.pathname.endsWith('/dist/cc1psx.wasm')) seen.wasm.push(url.pathname);
+    if (url.pathname.endsWith('/dist/cccp.wasm')) seen.cccp.push(url.pathname);
     if (url.pathname.endsWith('/dist/worker.js')) seen.worker.push(url.pathname);
   });
   return seen;
@@ -88,6 +101,34 @@ async function compileFixture(
   );
 }
 
+/** Run compileSource() on the page for a `sources` manifest entry. */
+async function compileSourceFixture(page: Page, entry: SourceFixtureEntry): Promise<Summary> {
+  return page.evaluate(
+    async ([source]) => {
+      const w = window as unknown as {
+        psyq: {
+          DEFAULT_CPP_FLAGS: readonly string[];
+          fetchFixture: (p: string) => Promise<Uint8Array>;
+          fetchHeaders: (m: Record<string, string>) => Promise<Record<string, Uint8Array>>;
+          summarize: (r: unknown) => Promise<Summary>;
+        };
+        compiler: { compileSource: (s: Uint8Array, o: unknown) => Promise<unknown> };
+      };
+      const bytes = await w.psyq.fetchFixture(source.source);
+      const result = await w.compiler.compileSource(bytes, {
+        gpSize: source.gpSize,
+        filename: source.filename,
+        rawFlags: source.rawFlags,
+        headers: await w.psyq.fetchHeaders(source.headers ?? {}),
+        cppFlags: [...w.psyq.DEFAULT_CPP_FLAGS, ...(source.extraCppFlags ?? [])],
+        ...(source.encoding === undefined ? {} : { encoding: source.encoding }),
+      });
+      return w.psyq.summarize(result);
+    },
+    [entry] as const,
+  );
+}
+
 test.describe('psyq-wasm in the browser', () => {
   test('immediate cancellation preserves queued work without unhandled errors', async ({
     page,
@@ -128,7 +169,10 @@ test.describe('psyq-wasm in the browser', () => {
     expect(info.psyqVersion).toBe('4.4');
     expect(info.gccVersion).toBe('2.8.1');
     expect(info.buildId).toMatch(/^sha256:[0-9a-f]{16}$/);
+    expect(info.preprocessorBuildId).toMatch(/^sha256:[0-9a-f]{16}$/);
+    expect(info.preprocessorBuildId).not.toBe(info.buildId);
     expect(assets.wasm).toEqual(['/dist/cc1psx.wasm']);
+    expect(assets.cccp).toEqual(['/dist/cccp.wasm']);
     expect(assets.worker).toEqual(['/dist/worker.js']);
   });
 
@@ -242,8 +286,9 @@ test.describe('psyq-wasm in the browser', () => {
     expect(after.success).toBe(true);
     expect(after.asmSha256).toBe(sha256(readFixture('expected/g0/t07_struct.s')));
 
-    // The module was fetched exactly once; only the worker script was reloaded.
+    // Both modules were fetched exactly once; only the worker script was reloaded.
     expect(assets.wasm).toHaveLength(1);
+    expect(assets.cccp).toHaveLength(1);
     expect(assets.worker.length).toBe(3);
   });
 
@@ -275,9 +320,69 @@ test.describe('psyq-wasm in the browser', () => {
     await createCompiler(page, {
       workerUrl: 'http://127.0.0.1:4173/dist/worker.js?override=1',
       wasmUrl: new URL('/dist/cc1psx.wasm?override=1', 'http://127.0.0.1:4173').href,
+      preprocessorWasmUrl: '/dist/cccp.wasm?override=1',
     });
     const summary = await compileFixture(page, 'src/t03_muldiv.i', { gpSize: 8, rawFlags: FLAGS });
     expect(summary.success).toBe(true);
     expect(assets.wasm).toEqual(['/dist/cc1psx.wasm']);
+    expect(assets.cccp).toEqual(['/dist/cccp.wasm']);
+  });
+
+  test('compiles raw C with virtual headers through the preprocessor to the reference bytes', async ({
+    page,
+  }) => {
+    await openHarness(page);
+    await createCompiler(page);
+    for (const entry of loadManifest().sources) {
+      const summary = await compileSourceFixture(page, entry);
+      expect(summary.exitCode, entry.name).toBe(entry.expectedExitCode);
+      expect(summary.stage, entry.name).toBe(entry.expectedStage ?? null);
+      expect(summary.preprocessedSha256, entry.name).toBe(
+        sha256(readFixture(entry.expectedPreprocessed)),
+      );
+      if (entry.expected !== undefined) {
+        expect(summary.asmSha256, entry.name).toBe(sha256(readFixture(entry.expected)));
+      } else {
+        expect(summary.asmSha256, entry.name).toBeNull();
+      }
+      const expectedStderr =
+        entry.expectedStderr === undefined ? '' : readFixtureText(entry.expectedStderr);
+      expect(summary.rawStderr, entry.name).toBe(expectedStderr);
+    }
+  });
+
+  test('rejects unmappable EUC-JP characters and keeps working afterwards', async ({ page }) => {
+    await openHarness(page);
+    await createCompiler(page);
+    const outcome = await page.evaluate(async () => {
+      const w = window as unknown as {
+        psyq: {
+          describeError: (e: unknown) => ErrorSummary;
+          summarize: (r: unknown) => Promise<Summary>;
+        };
+        compiler: { compileSource: (s: string, o: unknown) => Promise<unknown> };
+      };
+      let rejected: ErrorSummary | null = null;
+      try {
+        await w.compiler.compileSource('const char *yen = "¥";\n', {
+          gpSize: 8,
+          encoding: 'eucjp',
+        });
+      } catch (err) {
+        rejected = w.psyq.describeError(err);
+      }
+      const after = await w.psyq.summarize(
+        await w.compiler.compileSource('int otacon(void) { return 140; }\n', {
+          gpSize: 8,
+          encoding: 'eucjp',
+        }),
+      );
+      return { rejected, after };
+    });
+    expect(outcome.rejected).toMatchObject({ name: 'EncodingError', code: 'encoding' });
+    expect(outcome.after.success).toBe(true);
+    // Firefox and WebKit coarsen performance.now() in workers, so only presence is checked.
+    expect(typeof outcome.after.timings.preprocessMs).toBe('number');
+    expect(outcome.after.timings.preprocessMs).toBeGreaterThanOrEqual(0);
   });
 });

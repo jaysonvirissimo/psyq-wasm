@@ -257,6 +257,8 @@ describe('resolveLimits', () => {
       maxSourceBytes: 4 * 1024 * 1024,
       defaultTimeoutMs: 20_000,
       initTimeoutMs: 10_000,
+      maxHeaderBytes: 8 * 1024 * 1024,
+      maxHeaderCount: 512,
     });
     expect(resolveLimits({})).toEqual(DEFAULT_LIMITS);
   });
@@ -266,6 +268,8 @@ describe('resolveLimits', () => {
       maxSourceBytes: 14085,
       defaultTimeoutMs: 141,
       initTimeoutMs: 10_000,
+      maxHeaderBytes: 8 * 1024 * 1024,
+      maxHeaderCount: 512,
     });
   });
 
@@ -277,6 +281,8 @@ describe('resolveLimits', () => {
     [{ defaultTimeoutMs: Number.NaN }],
     [{ initTimeoutMs: 0 }],
     [{ initTimeoutMs: '5' }],
+    [{ maxHeaderBytes: 0 }],
+    [{ maxHeaderCount: 2.5 }],
   ])('rejects invalid override %j', (bad) => {
     expect(() => resolveLimits(bad as never)).toThrow(InvalidOptionsError);
   });

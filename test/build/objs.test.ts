@@ -29,3 +29,13 @@ describe('build/objs.txt', () => {
     for (const o of objs) expect(o).toMatch(/^[a-z0-9-]+\.o$/);
   });
 });
+
+describe('build/cccp-objs.txt', () => {
+  const objs = readFileSync(fromRoot('build', 'cccp-objs.txt'), 'utf8')
+    .split('\n')
+    .filter((l) => l.trim() !== '' && !l.startsWith('#'));
+
+  it('lists the five objects of the reference cccp link line, in order', () => {
+    expect(objs).toEqual(['cccp.o', 'cexp.o', 'prefix.o', 'version.o', 'obstack.o']);
+  });
+});

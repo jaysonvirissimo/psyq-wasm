@@ -4,19 +4,27 @@ import { CompilerController } from '../../src/controller.js';
 import {
   CompileTimeoutError,
   CompilerDisposedError,
+  EncodingError,
   InternalError,
   InvalidOptionsError,
   WorkerCrashError,
   isAbortError,
 } from '../../src/errors.js';
 import { DEFAULT_LIMITS } from '../../src/options.js';
-import { BUILD_ID, fakeWorkerFactory, type FakeWorker } from '../helpers/fake-worker.js';
+import {
+  BUILD_ID,
+  PREPROCESSOR_BUILD_ID,
+  fakeWorkerFactory,
+  type FakeWorker,
+} from '../helpers/fake-worker.js';
 
 const EMPTY_MODULE = new WebAssembly.Module(
   new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]),
 );
 
+const MODULES = { cc1: EMPTY_MODULE, cccp: EMPTY_MODULE };
 const SOURCE = new TextEncoder().encode('# 1 "rations.c"\nint otacon(void) { return 1; }\n');
+const RAW = '#include <codec.h>\nint otacon(void) { return CODEC; }\n';
 
 const flush = (): Promise<void> => vi.advanceTimersByTimeAsync(0).then(() => undefined);
 
@@ -35,7 +43,7 @@ interface Harness {
 
 async function harness(limits = DEFAULT_LIMITS): Promise<Harness> {
   const { spawn, workers } = fakeWorkerFactory();
-  const controller = new CompilerController({ module: EMPTY_MODULE, spawnWorker: spawn, limits });
+  const controller = new CompilerController({ modules: MODULES, spawnWorker: spawn, limits });
   const started = controller.start();
   await flush();
   workers[0]?.ready();
@@ -64,7 +72,7 @@ describe('CompilerController.start', () => {
   it('normalizes a synchronous construction failure', async () => {
     const error = new Error('constructor failed');
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       limits: DEFAULT_LIMITS,
       spawnWorker: () => {
         throw error;
@@ -80,7 +88,7 @@ describe('CompilerController.start', () => {
     async (method) => {
       const { spawn, workers } = fakeWorkerFactory();
       const controller = new CompilerController({
-        module: EMPTY_MODULE,
+        modules: MODULES,
         limits: DEFAULT_LIMITS,
         spawnWorker: () => {
           const w = spawn();
@@ -98,14 +106,20 @@ describe('CompilerController.start', () => {
   it('spawns one worker, posts init with the retained module, and reports the build id', async () => {
     const h = await harness();
     expect(h.spawn).toHaveBeenCalledTimes(1);
-    expect(h.worker().posted[0]?.message).toEqual({ type: 'init', module: EMPTY_MODULE });
-    expect(h.controller.buildId).toBe(BUILD_ID);
+    expect(h.worker().posted[0]?.message).toEqual({ type: 'init', modules: MODULES });
+    expect(h.controller.info).toEqual({
+      psyqVersion: '4.4',
+      gccVersion: '2.8.1',
+      buildId: BUILD_ID,
+      preprocessorBuildId: PREPROCESSOR_BUILD_ID,
+    });
+    expect(Object.isFrozen(h.controller.info)).toBe(true);
   });
 
   it('rejects with InternalError when the worker never reports ready', async () => {
     const { spawn } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: { ...DEFAULT_LIMITS, initTimeoutMs: 500 },
     });
@@ -119,7 +133,7 @@ describe('CompilerController.start', () => {
   it('rejects with WorkerCrashError when the worker errors during init', async () => {
     const { spawn, workers } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: DEFAULT_LIMITS,
     });
@@ -133,7 +147,7 @@ describe('CompilerController.start', () => {
   it('rejects with WorkerCrashError when the worker exits during init', async () => {
     const { spawn, workers } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: DEFAULT_LIMITS,
     });
@@ -146,7 +160,7 @@ describe('CompilerController.start', () => {
   it('treats a non-ready first message as a protocol violation', async () => {
     const { spawn, workers } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: DEFAULT_LIMITS,
     });
@@ -156,14 +170,14 @@ describe('CompilerController.start', () => {
     await expect(started).rejects.toBeInstanceOf(WorkerCrashError);
   });
 
-  it('buildId throws before start', () => {
+  it('info throws before start', () => {
     const { spawn } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: DEFAULT_LIMITS,
     });
-    expect(() => controller.buildId).toThrow(InternalError);
+    expect(() => controller.info).toThrow(InternalError);
   });
 });
 
@@ -288,7 +302,12 @@ describe('CompilerController.compile', () => {
     expect(result).toMatchObject({
       success: false,
       exitCode: 1,
-      compiler: { psyqVersion: '4.4', gccVersion: '2.8.1', buildId: BUILD_ID },
+      compiler: {
+        psyqVersion: '4.4',
+        gccVersion: '2.8.1',
+        buildId: BUILD_ID,
+        preprocessorBuildId: PREPROCESSOR_BUILD_ID,
+      },
       diagnostics: [{ severity: 'error', file: 'rations.c', line: 1 }],
     });
   });
@@ -400,7 +419,7 @@ describe('cancellation', () => {
     expect(h.spawn).toHaveBeenCalledTimes(2);
     const second = h.worker();
     expect(second).not.toBe(first);
-    expect(second.posted[0]?.message).toEqual({ type: 'init', module: EMPTY_MODULE });
+    expect(second.posted[0]?.message).toEqual({ type: 'init', modules: MODULES });
     // The queued request waits for the replacement to be ready.
     expect(second.compiles()).toHaveLength(0);
     second.ready();
@@ -651,7 +670,7 @@ describe('dispose', () => {
   it('can dispose after a failed start', async () => {
     const { spawn, workers } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: { ...DEFAULT_LIMITS, initTimeoutMs: 5 },
     });
@@ -666,7 +685,7 @@ describe('dispose', () => {
   it('can dispose before or during start', async () => {
     const { spawn, workers } = fakeWorkerFactory();
     const controller = new CompilerController({
-      module: EMPTY_MODULE,
+      modules: MODULES,
       spawnWorker: spawn,
       limits: DEFAULT_LIMITS,
     });
@@ -676,5 +695,183 @@ describe('dispose', () => {
     await expect(started).rejects.toBeInstanceOf(CompilerDisposedError);
     expect(workers[0]?.terminated).toBe(true);
     await expect(controller.start()).rejects.toBeInstanceOf(CompilerDisposedError);
+  });
+});
+
+describe('CompilerController.compileSource', () => {
+  it('posts a source request with both argv lists, headers, and transferred copies', async () => {
+    const h = await harness();
+    const header = new Uint8Array([0x2f, 0x2a, 0x2a, 0x2f]);
+    const pending = h.controller.compileSource(RAW, {
+      gpSize: 8,
+      filename: 'rations.c',
+      rawFlags: ['-O2', '-g0'],
+      cppFlags: ['-DFOX', '-Iinclude'],
+      headers: { 'include/codec.h': '#define CODEC 14085\n', 'include/freq.h': header },
+      encoding: 'eucjp',
+    });
+    await flush();
+    const post = h.worker().posted[1];
+    expect(post?.message).toEqual({
+      type: 'source',
+      id: 1,
+      filename: 'rations.c',
+      cppArgv: ['-nostdinc', '-undef', '-DFOX', '-Iinclude', 'rations.c', 'out.i'],
+      headers: [
+        { path: 'include/codec.h', data: new TextEncoder().encode('#define CODEC 14085\n') },
+        { path: 'include/freq.h', data: header },
+      ],
+      encoding: 'eucjp',
+      argv: ['-quiet', '-G', '8', '-O2', '-g0', 'out.i', '-o', 'out.s'],
+      source: new TextEncoder().encode(RAW),
+    });
+    const posted = post?.message;
+    if (posted?.type !== 'source') throw new Error('unreachable');
+    const buffers = [posted.source.buffer, ...posted.headers.map((x) => x.data.buffer)];
+    expect(post?.transfer).toEqual(buffers);
+    expect(new Set(buffers).size).toBe(3);
+    expect(posted.headers[1]?.data).not.toBe(header);
+    structuredClone(posted, { transfer: post?.transfer ?? [] });
+    expect(header.byteLength).toBe(4);
+    h.worker().result(1, { preprocessed: new Uint8Array([0x69]) });
+    const result = await pending;
+    expect(result.success).toBe(true);
+    expect(result.preprocessed).toEqual(new Uint8Array([0x69]));
+  });
+
+  it('accepts byte input and applies the source limit to the encoded bytes', async () => {
+    const h = await harness({ ...DEFAULT_LIMITS, maxSourceBytes: 2 });
+    await expect(h.controller.compileSource('あ', { gpSize: 8 })).rejects.toThrow(/3 bytes/);
+    await expect(h.controller.compileSource(1, { gpSize: 8 })).rejects.toBeInstanceOf(
+      InvalidOptionsError,
+    );
+    await expect(h.controller.compileSource('ab', { gpSize: 8, cppFlags: ['-P'] })).rejects.toThrow(
+      InvalidOptionsError,
+    );
+    await expect(
+      h.controller.compileSource('ab', { gpSize: 8, headers: { '../x.h': '' } }),
+    ).rejects.toThrow(InvalidOptionsError);
+    expect(h.worker().requests()).toEqual([]);
+    const pending = h.controller.compileSource(new Uint8Array([0x61, 0x62]), { gpSize: 0 });
+    await flush();
+    const posted = h.worker().sources()[0];
+    expect(posted).toMatchObject({ type: 'source', filename: 'input.c', encoding: 'utf8' });
+    h.worker().result(1);
+    await expect(pending).resolves.toMatchObject({ success: true });
+  });
+
+  it('maps a rejection to EncodingError without replacing the worker', async () => {
+    const h = await harness();
+    const first = settled(h.controller.compileSource(RAW, { gpSize: 8, encoding: 'eucjp' }));
+    const second = h.controller.compile(SOURCE, { gpSize: 8 });
+    await flush();
+    h.worker().reject(1, 'U+00A5 "¥" at line 3 of the preprocessed output has no EUC-JP mapping.');
+    await expect(first).rejects.toBeInstanceOf(EncodingError);
+    await expect(first).rejects.toMatchObject({
+      code: 'encoding',
+      character: '¥',
+      index: 0,
+      message: expect.stringMatching(/line 3/) as string,
+    });
+    expect(h.worker().terminated).toBe(false);
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+    await flush();
+    expect(h.worker().lastCompileId()).toBe(2);
+    h.worker().result(2);
+    await expect(second).resolves.toMatchObject({ success: true });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('treats a rejection with a stale id as an InternalError', async () => {
+    const h = await harness();
+    const inflight = settled(h.controller.compileSource(RAW, { gpSize: 8 }));
+    await flush();
+    h.worker().reject(999);
+    await expect(inflight).rejects.toBeInstanceOf(InternalError);
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves a preprocessor failure as a CompileResult with the stage', async () => {
+    const h = await harness();
+    const pending = h.controller.compileSource(RAW, { gpSize: 8 });
+    await flush();
+    h.worker().result(1, {
+      exitCode: 33,
+      asm: undefined,
+      stage: 'preprocess',
+      stderr: 'input.c:1: #error hound\n',
+    });
+    const result = await pending;
+    expect(result).toMatchObject({ success: false, exitCode: 33, stage: 'preprocess' });
+  });
+
+  it('shares the queue with compile requests in order', async () => {
+    const h = await harness();
+    const a = h.controller.compile(SOURCE, { gpSize: 8 });
+    const b = h.controller.compileSource(RAW, { gpSize: 8 });
+    const c = h.controller.compile(SOURCE, { gpSize: 0 });
+    await flush();
+    expect(
+      h
+        .worker()
+        .requests()
+        .map((m) => m.type),
+    ).toEqual(['compile']);
+    h.worker().result(1);
+    await a;
+    await flush();
+    expect(
+      h
+        .worker()
+        .requests()
+        .map((m) => m.type),
+    ).toEqual(['compile', 'source']);
+    h.worker().result(2);
+    await b;
+    await flush();
+    expect(h.worker().lastCompileId()).toBe(3);
+    h.worker().result(3);
+    await c;
+  });
+
+  it.each(['abort', 'timeout', 'dispose'] as const)(
+    'handles %s for an in-flight source request like a compile',
+    async (how) => {
+      const h = await harness();
+      const abort = new AbortController();
+      const pending = settled(
+        h.controller.compileSource(RAW, { gpSize: 8, signal: abort.signal, timeoutMs: 50 }),
+      );
+      await flush();
+      expect(h.worker().sources()).toHaveLength(1);
+      if (how === 'abort') {
+        abort.abort();
+        await expect(pending).rejects.toSatisfy(isAbortError);
+        expect(h.spawn).toHaveBeenCalledTimes(2);
+      } else if (how === 'timeout') {
+        await vi.advanceTimersByTimeAsync(50);
+        await expect(pending).rejects.toBeInstanceOf(CompileTimeoutError);
+        expect(h.spawn).toHaveBeenCalledTimes(2);
+      } else {
+        h.controller.dispose();
+        await expect(pending).rejects.toBeInstanceOf(CompilerDisposedError);
+        await expect(h.controller.compileSource(RAW, { gpSize: 8 })).rejects.toBeInstanceOf(
+          CompilerDisposedError,
+        );
+      }
+      expect(h.workers[0]?.terminated).toBe(true);
+      h.controller.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('rejects an already-aborted source request immediately', async () => {
+    const h = await harness();
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      h.controller.compileSource(RAW, { gpSize: 8, signal: abort.signal }),
+    ).rejects.toSatisfy(isAbortError);
+    expect(h.worker().requests()).toEqual([]);
   });
 });

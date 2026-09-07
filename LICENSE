@@ -8,9 +8,10 @@ SPDX expression for the package as a whole: MIT AND GPL-2.0-only
    Original work in this repository:
 
    - the TypeScript wrapper (src/) and its compiled output (dist/*.js,
-     dist/*.d.ts, except dist/cc1psx.js and dist/cc1psx.wasm);
+     dist/*.d.ts, except dist/cc1psx.js, dist/cc1psx.wasm, dist/cccp.js, and
+     dist/cccp.wasm);
    - build scripts and configuration (build/*.sh, build/pins.env,
-     build/objs.txt, package files, CI workflows);
+     build/objs.txt, build/cccp-objs.txt, package files, CI workflows);
    - tests, test fixtures, and helpers (test/), the demo (demo/), and
      documentation.
 
@@ -28,7 +29,11 @@ SPDX expression for the package as a whole: MIT AND GPL-2.0-only
    - dist/cc1psx.js    the Emscripten glue that loads it (Emscripten's own
                        runtime portions are MIT / Apache-2.0 with LLVM
                        exception; the combined file is distributed under
-                       GPL-2.0-only).
+                       GPL-2.0-only);
+   - dist/cccp.wasm    the compiled GCC 2.8.1 preprocessor, built from the
+                       same sources;
+   - dist/cccp.js      its Emscripten glue, under the same terms as
+                       dist/cc1psx.js.
 
    The complete corresponding source for the compiler artifact is identified
    in PROVENANCE.md and published with every release as a source archive.

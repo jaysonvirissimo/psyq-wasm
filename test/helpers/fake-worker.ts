@@ -4,8 +4,11 @@ import type { WorkerFactory, WorkerHandle } from '../../src/controller.js';
 import type { MainToWorkerMessage, ResultMessage } from '../../src/protocol.js';
 
 export const BUILD_ID = 'sha256:0123456789abcdef';
+export const PREPROCESSOR_BUILD_ID = 'sha256:fedcba9876543210';
 
 export const TIMINGS = { instantiateMs: 14.1, compileMs: 140.85, totalMs: 154.95 };
+
+type RequestMessage = Exclude<MainToWorkerMessage, { type: 'init' }>;
 
 /** An in-memory stand-in for a worker: records posts and lets tests emit events. */
 export class FakeWorker implements WorkerHandle {
@@ -42,8 +45,8 @@ export class FakeWorker implements WorkerHandle {
     this.messageHandler?.(data);
   }
 
-  ready(buildId: string = BUILD_ID): void {
-    this.emit({ type: 'ready', buildId });
+  ready(buildId: string = BUILD_ID, preprocessorBuildId: string = PREPROCESSOR_BUILD_ID): void {
+    this.emit({ type: 'ready', buildId, preprocessorBuildId });
   }
 
   /** Emit a result; pass `asm: undefined` explicitly to omit the output. */
@@ -65,6 +68,11 @@ export class FakeWorker implements WorkerHandle {
     this.emit(asm === undefined ? message : { ...message, asm });
   }
 
+  /** Emit an encoding rejection for a request. */
+  reject(id: number, message = 'U+00A5 "¥" at line 1 has no EUC-JP mapping.'): void {
+    this.emit({ type: 'reject', id, code: 'encoding', message, character: '¥', index: 0 });
+  }
+
   crash(message: string, id?: number): void {
     this.emit(id === undefined ? { type: 'crash', message } : { type: 'crash', id, message });
   }
@@ -77,14 +85,25 @@ export class FakeWorker implements WorkerHandle {
     this.exitHandler?.(code);
   }
 
+  /** Compile and source requests posted so far. */
+  requests(): RequestMessage[] {
+    return this.posted.map((p) => p.message).filter((m) => m.type !== 'init');
+  }
+
   /** Compile messages posted so far. */
   compiles(): MainToWorkerMessage[] {
     return this.posted.map((p) => p.message).filter((m) => m.type === 'compile');
   }
 
+  /** Source messages posted so far. */
+  sources(): MainToWorkerMessage[] {
+    return this.posted.map((p) => p.message).filter((m) => m.type === 'source');
+  }
+
+  /** Id of the most recently posted request of either kind. */
   lastCompileId(): number {
-    const last = this.compiles().at(-1);
-    if (last?.type !== 'compile') throw new Error('no compile posted');
+    const last = this.requests().at(-1);
+    if (last === undefined) throw new Error('no request posted');
     return last.id;
   }
 }

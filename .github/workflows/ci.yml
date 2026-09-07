@@ -28,6 +28,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:coverage
       - run: node scripts/verify-provenance.mjs
+      - name: Encoder table matches Ruby's EUC-JP converter
+        run: ruby scripts/gen-eucjp-table.rb --check
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -36,7 +38,7 @@ jobs:
           if-no-files-found: ignore
 
   build-wasm:
-    name: Build cc1psx.wasm
+    name: Build cc1psx.wasm and cccp.wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +48,7 @@ jobs:
           path: |
             build/vendor
             build/out/emcache
-          key: wasm-inputs-${{ hashFiles('build/pins.env', 'build/objs.txt', 'build/*.sh', 'build/patches/**', 'build/gen/**') }}
+          key: wasm-inputs-${{ hashFiles('build/pins.env', 'build/*.txt', 'build/*.sh', 'build/patches/**', 'build/gen/**') }}
       - run: npm run build:wasm
       - uses: actions/upload-artifact@v4
         with:
@@ -54,6 +56,8 @@ jobs:
           path: |
             dist/cc1psx.wasm
             dist/cc1psx.js
+            dist/cccp.wasm
+            dist/cccp.js
             dist/build-info.json
             dist/SHA256SUMS
           if-no-files-found: error

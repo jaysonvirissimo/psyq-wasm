@@ -26,6 +26,8 @@ describe('build/pins.env', () => {
     ],
     ['CC1_WASM_CFLAGS', /-std=gnu89/],
     ['CC1_WASM_LDFLAGS', /-sEMULATE_FUNCTION_POINTER_CASTS=1/],
+    ['CCCP_WASM_LDFLAGS', /-sEXPORT_NAME=createCccp/],
+    ['CPP_VERSION_BANNER', /^GNU CPP version 2\.8\.1, Psy-Q 4\.4, Homebrew Psy-Q \d+\.\d+\.\d+/],
   ])('pins %s', (key, pattern) => {
     expect(pins.get(key), key).toMatch(pattern);
   });
@@ -56,6 +58,16 @@ describe('build/pins.env', () => {
     expect(ldflags).toContain('-sINVOKE_RUN=0');
     expect(ldflags).toContain('-sEXPORTED_RUNTIME_METHODS=FS,callMain,ENV');
     expect(ldflags.join(' ')).not.toMatch(/PTHREAD|SHARED_MEMORY|MEMORY64/);
+  });
+
+  it('links the preprocessor exactly like the compiler, under its own export name', () => {
+    expect(pins.get('CCCP_WASM_LDFLAGS')).toBe(
+      (pins.get('CC1_WASM_LDFLAGS') ?? '').replace(
+        '-sEXPORT_NAME=createCc1',
+        '-sEXPORT_NAME=createCccp',
+      ),
+    );
+    expect(pins.get('CCCP_WASM_LDFLAGS')).not.toBe(pins.get('CC1_WASM_LDFLAGS'));
   });
 
   it('parses quoted values and ignores comments', () => {

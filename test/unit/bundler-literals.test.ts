@@ -17,13 +17,17 @@ describe('bundler-visible asset literals', () => {
     );
   });
 
-  it('resolves the wasm asset with the literal URL form', () => {
+  it('resolves both wasm assets with the literal URL form', () => {
     expect(browser).toContain("new URL('./cc1psx.wasm', import.meta.url)");
+    expect(browser).toContain("new URL('./cccp.wasm', import.meta.url)");
   });
 
   it('never spells the default asset names any other way', () => {
     const worker = readFileSync(fromRoot('src', 'worker.ts'), 'utf8');
-    expect(worker).toContain("from './cc1psx.js'");
-    expect(readFileSync(fromRoot('src', 'worker.node.ts'), 'utf8')).toContain("from './cc1psx.js'");
+    const node = readFileSync(fromRoot('src', 'worker.node.ts'), 'utf8');
+    for (const glue of ["from './cc1psx.js'", "from './cccp.js'"]) {
+      expect(worker).toContain(glue);
+      expect(node).toContain(glue);
+    }
   });
 });

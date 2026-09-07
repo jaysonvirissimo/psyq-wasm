@@ -33,6 +33,9 @@ describe('createBrowserPlatform', () => {
     expect(platform.defaultWasmUrl().href).toBe(
       new URL('../../src/cc1psx.wasm', import.meta.url).href,
     );
+    expect(platform.defaultPreprocessorWasmUrl().href).toBe(
+      new URL('../../src/cccp.wasm', import.meta.url).href,
+    );
     expect(platform.baseUrl.href).toBe(
       new URL('../../src/platform-browser.ts', import.meta.url).href,
     );
@@ -76,12 +79,20 @@ describe('createBrowserPlatform', () => {
     handle.onMessage(onMessage);
     handle.onError(onError);
     handle.onExit(onExit);
-    worker.onmessage?.(new MessageEvent('message', { data: { type: 'ready', buildId: 'x' } }));
+    worker.onmessage?.(
+      new MessageEvent('message', {
+        data: { type: 'ready', buildId: 'x', preprocessorBuildId: 'y' },
+      }),
+    );
     // Node has no ErrorEvent constructor; a structurally similar object suffices.
     worker.onerror?.({ message: 'script error', filename: 'worker.js' } as ErrorEvent);
     // Some engines deliver a bare value instead of an ErrorEvent.
     worker.onerror?.('opaque' as unknown as ErrorEvent);
-    expect(onMessage).toHaveBeenCalledWith({ type: 'ready', buildId: 'x' });
+    expect(onMessage).toHaveBeenCalledWith({
+      type: 'ready',
+      buildId: 'x',
+      preprocessorBuildId: 'y',
+    });
     expect(onError).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ message: 'script error' }),
@@ -90,8 +101,9 @@ describe('createBrowserPlatform', () => {
     expect(onExit).not.toHaveBeenCalled();
 
     const module = new WebAssembly.Module(EMPTY_MODULE_BYTES);
-    handle.postMessage({ type: 'init', module }, []);
-    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'init', module }, []);
+    const modules = { cc1: module, cccp: module };
+    handle.postMessage({ type: 'init', modules }, []);
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'init', modules }, []);
     handle.terminate();
     expect(worker.terminate).toHaveBeenCalledTimes(1);
   });

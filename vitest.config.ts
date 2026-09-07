@@ -26,7 +26,13 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.ts'],
       // Exclusions are documented in CONTRIBUTING.md ("Coverage exclusions").
-      exclude: ['src/worker.ts', 'src/worker.node.ts', 'src/cc1psx.d.ts', 'src/public-types.ts'],
+      exclude: [
+        'src/worker.ts',
+        'src/worker.node.ts',
+        'src/cc1psx.d.ts',
+        'src/cccp.d.ts',
+        'src/public-types.ts',
+      ],
       thresholds: {
         statements: 99,
         branches: 99,

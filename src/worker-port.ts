@@ -3,7 +3,7 @@
  * Glue between a message port (Web Worker global scope or a `worker_threads`
  * parent port) and the worker runtime.
  */
-import type { MessagePortLike } from './protocol.js';
+import type { MessagePortLike, WorkerToMainMessage } from './protocol.js';
 import type { WorkerRuntime } from './worker-runtime.js';
 
 export type { WorkerRuntime } from './worker-runtime.js';
@@ -21,8 +21,18 @@ function requestId(message: unknown): number | undefined {
 
 /**
  * Route incoming messages to `runtime.handle` one at a time and post each
- * reply, transferring the assembly buffer when present.
+ * reply, transferring the output buffers (assembly, preprocessed source) when
+ * present. A buffer shared by both views is transferred once.
  */
+function transferList(reply: WorkerToMainMessage): ArrayBuffer[] {
+  if (reply.type !== 'result') return [];
+  const buffers = new Set<ArrayBuffer>();
+  for (const view of [reply.asm, reply.preprocessed]) {
+    if (view !== undefined) buffers.add(view.buffer as ArrayBuffer);
+  }
+  return [...buffers];
+}
+
 export function attachRuntime(port: MessagePortLike, runtime: WorkerRuntime): void {
   let chain: Promise<void> = Promise.resolve();
   port.onmessage = (event) => {
@@ -30,8 +40,9 @@ export function attachRuntime(port: MessagePortLike, runtime: WorkerRuntime): vo
     chain = chain.then(async () => {
       try {
         const reply = await runtime.handle(data);
-        if (reply.type === 'result' && reply.asm !== undefined) {
-          port.postMessage(reply, [reply.asm.buffer as ArrayBuffer]);
+        const transfer = transferList(reply);
+        if (transfer.length > 0) {
+          port.postMessage(reply, transfer);
         } else {
           port.postMessage(reply);
         }
