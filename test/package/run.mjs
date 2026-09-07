@@ -10,7 +10,7 @@
  */
 import { execFileSync, spawn } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { connect, createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,6 +55,34 @@ async function freePort() {
       server.close(() => resolvePort(port));
     });
   });
+}
+
+/**
+ * Resolve once something accepts TCP connections on 127.0.0.1:port, reject
+ * if the child exits first or the deadline passes. Polling the port instead
+ * of parsing the child's stdout keeps this independent of vite's output
+ * format (colored when CI=true, for example).
+ */
+async function waitForPort(port, child, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let exitCode = null;
+  child.on('exit', (code) => {
+    exitCode = code;
+  });
+  while (Date.now() < deadline) {
+    if (exitCode !== null) throw new Error(`vite preview exited with ${String(exitCode)}`);
+    const open = await new Promise((resolveOpen) => {
+      const socket = connect({ host: '127.0.0.1', port });
+      socket.once('connect', () => {
+        socket.destroy();
+        resolveOpen(true);
+      });
+      socket.once('error', () => resolveOpen(false));
+    });
+    if (open) return;
+    await new Promise((resolveTick) => setTimeout(resolveTick, 250));
+  }
+  throw new Error('vite preview did not start');
 }
 
 // ---------------------------------------------------------------------------
@@ -173,19 +201,10 @@ if (skipVite) {
   const preview = spawn(
     'npx',
     ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
-    { cwd: viteApp, stdio: ['ignore', 'pipe', 'inherit'] },
+    { cwd: viteApp, stdio: ['ignore', 'inherit', 'inherit'] },
   );
   try {
-    await new Promise((resolveReady, reject) => {
-      const timer = setTimeout(() => reject(new Error('vite preview did not start')), 30_000);
-      preview.stdout.on('data', (chunk) => {
-        if (String(chunk).includes(previewUrl)) {
-          clearTimeout(timer);
-          resolveReady();
-        }
-      });
-      preview.on('exit', (code) => reject(new Error(`vite preview exited with ${String(code)}`)));
-    });
+    await waitForPort(port, preview, 30_000);
     const { chromium } = await import('@playwright/test');
     const browser = await chromium.launch();
     try {
