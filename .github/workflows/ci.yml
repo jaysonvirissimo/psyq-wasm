@@ -17,8 +17,8 @@ jobs:
     name: Format, lint, typecheck, unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -30,7 +30,7 @@ jobs:
       - run: node scripts/verify-provenance.mjs
       - name: Encoder table matches Ruby's EUC-JP converter
         run: ruby scripts/gen-eucjp-table.rb --check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
@@ -41,16 +41,16 @@ jobs:
     name: Build cc1psx.wasm and cccp.wasm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Cache pinned sources and Emscripten system libraries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             build/vendor
             build/out/emcache
           key: wasm-inputs-${{ hashFiles('build/pins.env', 'build/*.txt', 'build/*.sh', 'build/patches/**', 'build/gen/**') }}
       - run: npm run build:wasm
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wasm
           path: |
@@ -76,18 +76,18 @@ jobs:
           - { os: windows-latest, node: 24 }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wasm
           path: dist
       - run: npm run build:ts
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
       - run: npm run test:node
@@ -98,20 +98,20 @@ jobs:
     needs: build-wasm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wasm
           path: dist
       - run: npm run build:ts
       - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:browser
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -123,13 +123,13 @@ jobs:
     needs: build-wasm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wasm
           path: dist

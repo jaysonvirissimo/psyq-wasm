@@ -19,3 +19,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # upload-artifact and download-artifact majors are not cross-compatible;
+      # nothing here benefits from a solo PR.
+      actions:
+        patterns: ['*']

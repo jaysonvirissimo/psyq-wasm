@@ -60,7 +60,7 @@ export function attachRuntime(port: MessagePortLike, runtime: WorkerRuntime): vo
 
 /** The part of `worker_threads.MessagePort` the adapter needs. */
 export interface NodeParentPortLike {
-  postMessage(value: unknown, transferList?: ArrayBuffer[]): void;
+  postMessage(value: unknown, transferList?: readonly Transferable[]): void;
   on(event: 'message', listener: (value: unknown) => void): unknown;
 }
 
