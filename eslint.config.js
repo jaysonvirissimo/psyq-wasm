@@ -23,7 +23,9 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        // vitest.config.ts is deliberately outside tsconfig.json's `include`
+        // (see the comment there), so lint it against an inferred project.
+        projectService: { allowDefaultProject: ['vitest.config.ts'] },
         tsconfigRootDir: import.meta.dirname,
       },
     },

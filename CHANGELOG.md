@@ -9,6 +9,11 @@ changes, because they can alter emitted assembly.
 
 ## [Unreleased]
 
+### Changed
+
+- Require Node 22 or newer (`engines.node`). Node 20 reached end of life on
+  2026-04-30.
+
 ## [0.2.0] - 2026-09-07
 
 ### Added

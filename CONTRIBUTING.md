@@ -34,7 +34,7 @@ standard clean-install path. Compiler builds use Docker exclusively, with
 Emscripten 6.0.9 pinned by digest and `linux/amd64` selected on every host.
 Each build compiles fresh objects; only Emscripten system libraries are cached.
 
-CI exercises Node 20, 22, and 24 on Linux and Node 24 on macOS and Windows.
+CI exercises Node 22 and 24 on Linux and Node 24 on macOS and Windows.
 The Node package consumer installs into a path containing spaces and `#` to
 exercise native file URL handling.
 

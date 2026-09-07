@@ -31,7 +31,12 @@
     "test",
     "scripts",
     "demo",
-    "vitest.config.ts",
+    // vitest.config.ts is omitted: importing `vitest/config` pulls in vitest
+    // 5.0.0's own .d.ts files, which do not type-check standalone. Two of the
+    // errors are vitest-dev/vitest#11140 (fixed upstream, unreleased); the third
+    // is an unreported variance between BenchmarkUserOptions.provider and
+    // ResolvedBenchmarkOptions.provider that only bites under
+    // exactOptionalPropertyTypes. Restore this entry once both are fixed.
     "playwright.config.ts",
     "eslint.config.js",
     "prettier.config.js"
