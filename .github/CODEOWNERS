@@ -1,0 +1,7 @@
+# Default owner for everything in the repository.
+* @jaysonvirissimo
+
+# Compiler build inputs and provenance need extra care.
+/build/ @jaysonvirissimo
+/PROVENANCE.md @jaysonvirissimo
+/LICENSES/ @jaysonvirissimo

@@ -1,0 +1,466 @@
+{
+  "$comment": "One entry per (input, options, expected output) tuple. See README.md.",
+  "fixtures": [
+    {
+      "name": "t01_arith-g8",
+      "input": "src/t01_arith.i",
+      "filename": "t01_arith.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t01_arith.s",
+      "expectedStderr": "expected/g8/t01_arith.err",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t01_arith-g0",
+      "input": "src/t01_arith.i",
+      "filename": "t01_arith.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t01_arith.s",
+      "expectedStderr": "expected/g0/t01_arith.err",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t02_shift-g8",
+      "input": "src/t02_shift.i",
+      "filename": "t02_shift.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t02_shift.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t02_shift-g0",
+      "input": "src/t02_shift.i",
+      "filename": "t02_shift.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t02_shift.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t03_muldiv-g8",
+      "input": "src/t03_muldiv.i",
+      "filename": "t03_muldiv.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t03_muldiv.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t03_muldiv-g0",
+      "input": "src/t03_muldiv.i",
+      "filename": "t03_muldiv.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t03_muldiv.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t04_branch-g8",
+      "input": "src/t04_branch.i",
+      "filename": "t04_branch.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t04_branch.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t04_branch-g0",
+      "input": "src/t04_branch.i",
+      "filename": "t04_branch.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t04_branch.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t05_loop-g8",
+      "input": "src/t05_loop.i",
+      "filename": "t05_loop.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t05_loop.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t05_loop-g0",
+      "input": "src/t05_loop.i",
+      "filename": "t05_loop.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t05_loop.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t06_ptr-g8",
+      "input": "src/t06_ptr.i",
+      "filename": "t06_ptr.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t06_ptr.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t06_ptr-g0",
+      "input": "src/t06_ptr.i",
+      "filename": "t06_ptr.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t06_ptr.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t07_struct-g8",
+      "input": "src/t07_struct.i",
+      "filename": "t07_struct.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t07_struct.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t07_struct-g0",
+      "input": "src/t07_struct.i",
+      "filename": "t07_struct.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t07_struct.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t08_call-g8",
+      "input": "src/t08_call.i",
+      "filename": "t08_call.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t08_call.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t08_call-g0",
+      "input": "src/t08_call.i",
+      "filename": "t08_call.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t08_call.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t09_sign-g8",
+      "input": "src/t09_sign.i",
+      "filename": "t09_sign.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t09_sign.s",
+      "expectedStderr": "expected/g8/t09_sign.err",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t09_sign-g0",
+      "input": "src/t09_sign.i",
+      "filename": "t09_sign.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t09_sign.s",
+      "expectedStderr": "expected/g0/t09_sign.err",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t10_regs-g8",
+      "input": "src/t10_regs.i",
+      "filename": "t10_regs.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t10_regs.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t10_regs-g0",
+      "input": "src/t10_regs.i",
+      "filename": "t10_regs.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t10_regs.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t11_data-g8",
+      "input": "src/t11_data.i",
+      "filename": "t11_data.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t11_data.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t11_data-g0",
+      "input": "src/t11_data.i",
+      "filename": "t11_data.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t11_data.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t12_misc-g8",
+      "input": "src/t12_misc.i",
+      "filename": "t12_misc.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t12_misc.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t12_misc-g0",
+      "input": "src/t12_misc.i",
+      "filename": "t12_misc.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t12_misc.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t07_struct-g8-debug",
+      "input": "src/t07_struct.i",
+      "filename": "t07_struct.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g",
+        "-Wall"
+      ],
+      "expected": "expected/g/t07_struct.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t13_frame-g8",
+      "input": "src/t13_frame.i",
+      "filename": "t13_frame.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t13_frame.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t13_frame-g0",
+      "input": "src/t13_frame.i",
+      "filename": "t13_frame.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t13_frame.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t14_half-g8",
+      "input": "src/t14_half.i",
+      "filename": "t14_half.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t14_half.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t14_half-g0",
+      "input": "src/t14_half.i",
+      "filename": "t14_half.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t14_half.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t15_gte-g8",
+      "input": "src/t15_gte.i",
+      "filename": "t15_gte.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t15_gte.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t15_gte-g0",
+      "input": "src/t15_gte.i",
+      "filename": "t15_gte.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t15_gte.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t16_float-g8",
+      "input": "src/t16_float.i",
+      "filename": "t16_float.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t16_float.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t16_float-g0",
+      "input": "src/t16_float.i",
+      "filename": "t16_float.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t16_float.s",
+      "expectedExitCode": 0
+    },
+    {
+      "name": "t17_error-g8",
+      "input": "src/t17_error.i",
+      "filename": "t17_error.i",
+      "gpSize": 8,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g8/t17_error.s",
+      "expectedStderr": "expected/g8/t17_error.err",
+      "expectedExitCode": 33
+    },
+    {
+      "name": "t17_error-g0",
+      "input": "src/t17_error.i",
+      "filename": "t17_error.i",
+      "gpSize": 0,
+      "rawFlags": [
+        "-O2",
+        "-g0",
+        "-Wall"
+      ],
+      "expected": "expected/g0/t17_error.s",
+      "expectedStderr": "expected/g0/t17_error.err",
+      "expectedExitCode": 33
+    }
+  ]
+}

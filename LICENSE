@@ -1,0 +1,37 @@
+psyq-wasm is distributed under two licenses, applied per file. Every source
+file carries an SPDX-License-Identifier header naming its license.
+
+SPDX expression for the package as a whole: MIT AND GPL-2.0-only
+
+1. MIT (LICENSES/MIT.txt)
+
+   Original work in this repository:
+
+   - the TypeScript wrapper (src/) and its compiled output (dist/*.js,
+     dist/*.d.ts, except dist/cc1psx.js and dist/cc1psx.wasm);
+   - build scripts and configuration (build/*.sh, build/pins.env,
+     build/objs.txt, package files, CI workflows);
+   - tests, test fixtures, and helpers (test/), the demo (demo/), and
+     documentation.
+
+2. GPL-2.0-only (LICENSES/GPL-2.0-only.txt)
+
+   Work derived from the GNU C Compiler 2.8.1 as modified for the Sony PsyQ
+   toolchain, which is licensed under the GNU General Public License,
+   version 2:
+
+   - build/gen/        generated GCC sources (parser tables, insn-* files,
+                       configuration headers) produced by the historical
+                       build described in PROVENANCE.md;
+   - build/patches/    compatibility patches applied to the GCC sources;
+   - dist/cc1psx.wasm  the compiled compiler;
+   - dist/cc1psx.js    the Emscripten glue that loads it (Emscripten's own
+                       runtime portions are MIT / Apache-2.0 with LLVM
+                       exception; the combined file is distributed under
+                       GPL-2.0-only).
+
+   The complete corresponding source for the compiler artifact is identified
+   in PROVENANCE.md and published with every release as a source archive.
+
+No original proprietary Sony binaries are included in this repository or in
+the published package.

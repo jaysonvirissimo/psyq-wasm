@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, verify, publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub release
+      id-token: write # npm provenance (trusted publishing)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+
+      - name: Build the compiler twice and require identical artifacts
+        run: |
+          npm run build:wasm
+          cp dist/SHA256SUMS build/out/first.SHA256SUMS
+          rm -rf dist build/out/obj
+          npm run build:wasm
+          diff build/out/first.SHA256SUMS dist/SHA256SUMS || {
+            echo "::error::cc1psx.wasm is not reproducible; document the cause in PROVENANCE.md section 7"
+            exit 1
+          }
+
+      - name: Verify generated sources against a fresh regeneration
+        run: build/check-gen.sh
+
+      - run: npm run build:ts
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run test:node
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:browser
+      - run: npm run test:package
+      - run: node scripts/verify-provenance.mjs --tag "${GITHUB_REF_NAME}"
+
+      - name: Corresponding source archive
+        run: scripts/pack-source-archive.sh "${GITHUB_REF_NAME#v}" build/out/release
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/cc1psx.wasm
+            dist/cc1psx.js
+            dist/build-info.json
+            dist/SHA256SUMS
+            build/out/release/*.tar.gz
+            build/out/release/*.sha256
+            PROVENANCE.md
+          generate_release_notes: true

@@ -1,0 +1,14 @@
+dist/
+coverage/
+build/gen/
+build/vendor/
+build/out/
+build/patches/
+test/fixtures/
+test/package/*/dist/
+test/package/*/node_modules/
+playwright-report/
+test-results/
+package-lock.json
+CHANGELOG.md
+docs/

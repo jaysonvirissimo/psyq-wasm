@@ -1,0 +1,11 @@
+# Default: normalize text to LF in the repository.
+* text=auto eol=lf
+
+# Byte-exact material: never touch line endings.
+test/fixtures/** -text
+build/gen/** -text
+build/patches/** -text
+
+# Binaries
+*.wasm binary
+*.png binary
