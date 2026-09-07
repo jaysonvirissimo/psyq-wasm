@@ -166,15 +166,20 @@ if (skipVite) {
   );
 
   const port = await freePort();
-  const preview = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], {
-    cwd: viteApp,
-    stdio: ['ignore', 'pipe', 'inherit'],
-  });
+  // Bind explicitly to 127.0.0.1: without --host, vite listens on "localhost",
+  // which Linux resolves to ::1 first, and the page navigation below (IPv4)
+  // would be refused.
+  const previewUrl = `http://127.0.0.1:${String(port)}/`;
+  const preview = spawn(
+    'npx',
+    ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+    { cwd: viteApp, stdio: ['ignore', 'pipe', 'inherit'] },
+  );
   try {
     await new Promise((resolveReady, reject) => {
       const timer = setTimeout(() => reject(new Error('vite preview did not start')), 30_000);
       preview.stdout.on('data', (chunk) => {
-        if (String(chunk).includes('http')) {
+        if (String(chunk).includes(previewUrl)) {
           clearTimeout(timer);
           resolveReady();
         }
@@ -187,7 +192,7 @@ if (skipVite) {
       const page = await browser.newPage();
       const errors = [];
       page.on('pageerror', (e) => errors.push(String(e)));
-      await page.goto(`http://127.0.0.1:${String(port)}/`);
+      await page.goto(previewUrl);
       await page.waitForFunction(() => window.result !== undefined, undefined, { timeout: 60_000 });
       const result = await page.evaluate(() => window.result);
       console.log(JSON.stringify(result));
