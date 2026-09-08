@@ -29,6 +29,12 @@ README's Stability section for exactly what is promised.
 
 ### Changed
 
+- Each error class now declares `code` as its own literal rather than the whole
+  `ErrorCode` union: `EncodingError.code` is `'encoding'`. `code` therefore works
+  as a discriminant, reaching subclass-only fields such as
+  `EncodingError.character` without `instanceof`. `PsyqWasmError` itself still
+  declares the whole union, so a broadly caught error reads as `ErrorCode`
+  exactly as before. Types only; no runtime behaviour changed.
 - `createCompiler()` no longer takes a second `platform` argument. It was an
   undocumented test seam; `createCompilerWith()` remains the injection point the
   tests use.

@@ -5,6 +5,7 @@
 // accident once removed `createCompiler` from the shipped declarations while
 // leaving the runtime export intact, and every JavaScript smoke test still passed.
 import {
+  CompileTimeoutError,
   DEFAULT_CPP_FLAGS,
   DEFAULT_LIMITS,
   EncodingError,
@@ -60,14 +61,31 @@ export async function compile(source: Uint8Array): Promise<CompileResult> {
     return await compiler.compileSource('int stock(void) { return FREQ; }', fromSource);
   } catch (error: unknown) {
     if (isAbortError(error)) throw error;
-    // `code` is the wide ErrorCode union on every error class, so consumers
-    // discriminate with instanceof rather than on the tag.
-    if (error instanceof EncodingError) console.log(error.code, error.name);
-    if (error instanceof InvalidOptionsError) console.log(error.code, error.name);
+    // A catch binding is `unknown`, so instanceof is still the way in. What
+    // the packed declarations must get right is that `code` is then the
+    // class's own literal rather than the whole union.
+    if (error instanceof EncodingError) {
+      const encoding: 'encoding' = error.code;
+      console.log(encoding, error.name, describeError(error));
+    }
+    if (error instanceof InvalidOptionsError) {
+      const invalidOptions: 'invalid-options' = error.code;
+      console.log(invalidOptions, error.name);
+    }
     throw error;
   } finally {
     compiler.dispose();
   }
+}
+
+/**
+ * `code` discriminates a union of error classes: both branches below reach
+ * subclass-only fields with no instanceof in sight.
+ */
+function describeError(error: EncodingError | CompileTimeoutError): string {
+  return error.code === 'encoding'
+    ? `${error.character} at ${String(error.index)}`
+    : `${String(error.timeoutMs)} ms`;
 }
 
 const code: ErrorCode = 'timeout';

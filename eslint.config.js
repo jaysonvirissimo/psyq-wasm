@@ -13,6 +13,10 @@ export default tseslint.config(
       'test/fixtures/',
       'test/package/**/dist/',
       'test/package/**/node_modules/',
+      'test/package/out/',
+      // Type-checked against the packed tarball by test/package/run.mjs, not
+      // against the working tree; see the note in tsconfig.json.
+      'test/package/ts-app/',
       'playwright-report/',
       'test-results/',
     ],

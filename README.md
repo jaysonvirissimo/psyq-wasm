@@ -235,7 +235,20 @@ only for these:
 | `InternalError`         | `internal`        | asset failed to load, protocol violation, worker never came up           |
 
 All library errors extend `PsyqWasmError`; `isAbortError()` recognises abort
-rejections.
+rejections. Each class fixes `code` to its own literal, so `code` discriminates
+a union of them and reaches subclass-only fields on its own:
+
+```ts
+function describe(error: EncodingError | CompileTimeoutError): string {
+  return error.code === 'encoding'
+    ? `${error.character} at ${error.index}`
+    : `${error.timeoutMs} ms`;
+}
+```
+
+A `catch` binding is `unknown`, so start there with `instanceof`. Narrowing to
+`PsyqWasmError` gives you the base class, whose `code` is the whole `ErrorCode`
+union; narrowing to a subclass gives you that class's literal and its extra fields.
 
 ### Limits
 

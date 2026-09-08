@@ -9,7 +9,15 @@
  * the consumer apps' dependencies.
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { connect, createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -30,6 +38,8 @@ function run(cmd, args, cwd) {
   console.log(`$ ${cmd} ${args.join(' ')}`);
   // npm.cmd cannot be executed directly on Windows. Invoke npm's JS entry
   // with the current Node executable, preserving arguments without a shell.
+  // The same applies to npx, so callers reach a package's bin through
+  // nodeBin() rather than through npx.
   const npmCli =
     process.env.npm_execpath ?? join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
   const useNpmCli = cmd === 'npm' && existsSync(npmCli);
@@ -39,6 +49,15 @@ function run(cmd, args, cwd) {
     encoding: 'utf8',
     env: { ...process.env, PSYQ_FIXTURES: join(ROOT, 'test', 'fixtures') },
   });
+}
+
+/**
+ * Path to a JS entry point of a dependency installed in one of the consumer
+ * apps, to be run with `process.execPath`. Windows has no executable `npx`
+ * for execFileSync to find, and going through a shell would need quoting.
+ */
+function nodeBin(app, ...segments) {
+  return join(app, 'node_modules', ...segments);
 }
 
 function assert(condition, message) {
@@ -179,7 +198,7 @@ writeFileSync(
 run('npm', ['install', '--no-audit', '--no-fund', '--no-package-lock', '--ignore-scripts'], tsApp);
 // The JavaScript consumers above never look at a declaration file, so only this
 // step can catch a package that resolves at runtime but not for a TS user.
-run('npx', ['tsc', '--noEmit'], tsApp);
+run(process.execPath, [nodeBin(tsApp, 'typescript', 'bin', 'tsc'), '--noEmit'], tsApp);
 assert(true, 'typescript consumer type-checks against the packed declarations');
 
 // ---------------------------------------------------------------------------
@@ -210,10 +229,14 @@ if (skipVite) {
     ['install', '--no-audit', '--no-fund', '--no-package-lock', '--ignore-scripts'],
     viteApp,
   );
-  run('npx', ['vite', 'build', '--logLevel', 'warn'], viteApp);
-  const assets = execFileSync('find', [join(viteApp, 'dist'), '-type', 'f'], { encoding: 'utf8' })
-    .trim()
-    .split('\n');
+  run(
+    process.execPath,
+    [nodeBin(viteApp, 'vite', 'bin', 'vite.js'), 'build', '--logLevel', 'warn'],
+    viteApp,
+  );
+  const assets = readdirSync(join(viteApp, 'dist'), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name);
   assert(assets.filter((a) => a.endsWith('.wasm')).length >= 2, 'vite emitted both wasm assets');
   assert(
     assets.filter((a) => a.endsWith('.js')).length >= 2,
@@ -226,8 +249,16 @@ if (skipVite) {
   // would be refused.
   const previewUrl = `http://127.0.0.1:${String(port)}/`;
   const preview = spawn(
-    'npx',
-    ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+    process.execPath,
+    [
+      nodeBin(viteApp, 'vite', 'bin', 'vite.js'),
+      'preview',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      String(port),
+      '--strictPort',
+    ],
     { cwd: viteApp, stdio: ['ignore', 'inherit', 'inherit'] },
   );
   try {

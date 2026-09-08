@@ -42,5 +42,17 @@
     "eslint.config.js",
     "prettier.config.js"
   ],
-  "exclude": ["node_modules", "dist", "test/package/**/node_modules", "test/package/**/dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test/package/out",
+    "test/package/**/node_modules",
+    "test/package/**/dist",
+    // The TypeScript consumer fixture imports "psyq-wasm" by name. Inside the
+    // working tree that only resolves through the root package self-reference
+    // to a built dist/, which CI does not have when it type-checks. It is
+    // deliberately checked elsewhere: test/package/run.mjs runs tsc over it
+    // against the packed tarball, which is the resolution a real consumer gets.
+    "test/package/ts-app"
+  ]
 }
