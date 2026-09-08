@@ -40,6 +40,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
  * @property {BuildInfo} [buildInfo]      parsed dist/build-info.json, when built
  * @property {string} packageVersion      package.json version
  * @property {string} [tag]               release tag to check against the version
+ * @property {string} [changelog]         CHANGELOG.md text, checked when tagging
  */
 
 /**
@@ -65,7 +66,7 @@ export function parsePins(text) {
  * @param {VerifyInput} input
  * @returns {string[]}
  */
-export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
+export function verify({ provenance, pins, buildInfo, packageVersion, tag, changelog }) {
   /** @type {string[]} */
   const problems = [];
   /** @param {string} key @param {string | undefined} [value] */
@@ -123,6 +124,13 @@ export function verify({ provenance, pins, buildInfo, packageVersion, tag }) {
   if (tag !== undefined && `v${packageVersion}` !== tag) {
     problems.push(`package.json version ${packageVersion} does not match tag ${tag}`);
   }
+  // A release whose changelog was never written is a release nobody can read.
+  if (tag !== undefined && changelog !== undefined) {
+    const heading = new RegExp(`^## \\[${packageVersion.replace(/\./g, '\\.')}\\]`, 'm');
+    if (!heading.test(changelog)) {
+      problems.push(`CHANGELOG.md has no "## [${packageVersion}]" section`);
+    }
+  }
   return problems;
 }
 
@@ -143,6 +151,7 @@ if (invokedDirectly) {
       : undefined,
     packageVersion: JSON.parse(readFileSync(`${ROOT}package.json`, 'utf8')).version,
     tag,
+    changelog: readFileSync(`${ROOT}CHANGELOG.md`, 'utf8'),
   });
   for (const p of problems) console.error(`provenance: ${p}`);
   if (problems.length === 0) console.log('provenance: OK');

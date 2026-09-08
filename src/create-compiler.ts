@@ -17,9 +17,13 @@ export interface Platform {
   spawnWorker(url: URL | undefined): WorkerHandle;
 }
 
+function toUrl(value: string | URL, base: URL): URL {
+  return value instanceof URL ? value : new URL(value, base);
+}
+
 function resolveUrl(value: string | URL | undefined, fallback: () => URL, base: URL): URL {
   if (value === undefined) return fallback();
-  return value instanceof URL ? value : new URL(value, base);
+  return toUrl(value, base);
 }
 
 /** Shared implementation behind both `createCompiler` entry points. */
@@ -34,10 +38,11 @@ export async function createCompilerWith(
     () => platform.defaultPreprocessorWasmUrl(),
     platform.baseUrl,
   );
+  // Left undefined on purpose when the caller gave no override: the platform
+  // then spawns its own worker through the literal form bundlers must see,
+  // rather than through a URL this function computed.
   const workerUrl =
-    options?.workerUrl === undefined
-      ? undefined
-      : resolveUrl(options.workerUrl, () => platform.defaultWorkerUrl(), platform.baseUrl);
+    options?.workerUrl === undefined ? undefined : toUrl(options.workerUrl, platform.baseUrl);
 
   const [cc1, cccp] = await Promise.all([
     platform.loadModule(wasmUrl),

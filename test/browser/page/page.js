@@ -3,6 +3,7 @@
 // Playwright specs can drive real compiles in a real browser.
 import * as psyq from '../../../dist/index.js';
 import { generate } from '../../../scripts/gen-stress-fixture.mjs';
+import { sweep } from '../../../scripts/bench.mjs';
 
 const log = document.getElementById('log');
 
@@ -61,6 +62,7 @@ window.psyq = {
   summarize,
   describeError,
   generate,
+  sweep,
   log: (message) => {
     log.textContent += `${message}\n`;
   },

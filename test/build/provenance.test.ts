@@ -74,6 +74,30 @@ describe('verify-provenance', () => {
       'build-info.json preprocessor.buildId is not derived from preprocessor.wasmSha256',
       `package.json version ${version} does not match tag v9.9.9`,
     ]);
+    // A tagged release must have its changelog section written first.
+    expect(
+      verify({
+        provenance,
+        pins,
+        packageVersion: version,
+        tag: `v${version}`,
+        changelog: `## [${version}] - 2026-09-07\n`,
+      }),
+    ).toEqual([]);
+    expect(
+      verify({
+        provenance,
+        pins,
+        packageVersion: version,
+        tag: `v${version}`,
+        changelog: '## [Unreleased]\n\n## [0.0.1] - 2020-01-01\n',
+      }),
+    ).toEqual([`CHANGELOG.md has no "## [${version}]" section`]);
+    // Without a tag it is an ordinary CI run, and an unreleased version is fine.
+    expect(
+      verify({ provenance, pins, packageVersion: version, changelog: '## [Unreleased]\n' }),
+    ).toEqual([]);
+
     const missing = new Map(pins);
     missing.delete('GCC_TREE_SHA');
     expect(verify({ provenance, pins: missing, packageVersion: version })).toEqual([

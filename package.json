@@ -1,6 +1,6 @@
 {
   "name": "psyq-wasm",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "PsyQ 4.4 cc1psx (GCC 2.8.1, mips-psx) compiled to WebAssembly, for byte-exact PlayStation 1 matching-decompilation tooling in the browser and Node.js",
   "keywords": [
     "psyq",
@@ -61,6 +61,8 @@
     "test:node": "vitest run --project node",
     "test:browser": "playwright test",
     "test:package": "node test/package/run.mjs",
+    "bench": "node scripts/bench.mjs --json build/out/bench/node.json",
+    "bench:browser": "playwright test --config playwright.bench.config.ts",
     "build:vendor": "build/fetch-vendor.sh",
     "build:wasm": "build/build-wasm.sh",
     "build:ts": "tsc -p tsconfig.build.json",

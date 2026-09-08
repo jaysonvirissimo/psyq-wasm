@@ -38,6 +38,7 @@
     // ResolvedBenchmarkOptions.provider that only bites under
     // exactOptionalPropertyTypes. Restore this entry once both are fixed.
     "playwright.config.ts",
+    "playwright.bench.config.ts",
     "eslint.config.js",
     "prettier.config.js"
   ],

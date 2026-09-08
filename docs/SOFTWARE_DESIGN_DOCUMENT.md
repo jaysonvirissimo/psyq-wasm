@@ -4,7 +4,7 @@
 
 | Field               | Value                                               |
 | ------------------- | --------------------------------------------------- |
-| Status              | Draft (M4 delivered in 0.2.0)                       |
+| Status              | Adopted (M5 delivered in 1.0.0)                     |
 | Initial compiler    | PsyQ 4.4 / GCC 2.8.1 / `mips-psx`                   |
 | Primary runtime     | Modern web browsers                                 |
 | Secondary runtime   | Node.js                                             |
@@ -1665,11 +1665,11 @@ A stable `1.0` should require:
 * at least 99% TypeScript test coverage;
 * documented supported compiler version.
 
-`compileSource()` may be included in `1.0` if the preprocessor and encoding pipeline are fully verified.
-
-If it is not ready, the project should either delay `1.0` or explicitly define a `1.0` scope that does not promise raw-source compilation.
-
-The decision should be made before the first release candidate.
+Decided before the first release candidate, and recorded here: **`compileSource()`
+is inside the `1.0` scope.** The preprocessor and encoding pipeline are fully
+verified — every fixture `.c` reproduces its committed `.i` through `cccp.wasm`,
+in Node and in all three browsers — so the raw-source pipeline carries the same
+semver promise as the exact layer. See the README's Stability section.
 
 ### 23.3 Changelog
 
@@ -1836,16 +1836,23 @@ Acceptance met: the convenience pipeline reproduces the reference preprocessing 
 
 ---
 
-### M5 — Stable release
+### M5 — Stable release (delivered in 1.0.0)
 
-Deliver:
+Delivered:
 
-* stable documented API;
-* complete package compatibility matrix;
-* performance report;
+* stable documented API, with the semver scope stated in the README and the
+  emitted declarations pinned by an API-surface test;
+* complete package compatibility matrix (§19.4): Node, TypeScript, Vite, direct
+  browser ESM, and GitHub Pages subpath hosting, all against the packed tarball;
+* performance report (`docs/PERFORMANCE.md`), Node and all three browsers;
 * final license/provenance review;
-* release automation;
+* release automation on npm trusted publishing, plus a scheduled reference-drift
+  job so generated sources and fixtures no longer go unchecked between tags;
 * `1.0` release criteria met.
+
+Acceptance met: every §23.2 criterion holds, the whole fixture set is byte-exact
+in Node and all three browsers, and TypeScript coverage is 100% statements,
+functions, and lines.
 
 ---
 
@@ -1874,6 +1881,12 @@ The browser has no standard EUC-JP encoder. Resolved in 0.2.0: in-tree JIS-mappi
 Compiler fidelity should not depend on the browser, but performance may.
 
 Safari, Firefox, and Chromium must all be measured.
+
+Resolved in 1.0.0: `docs/PERFORMANCE.md` reports warm-compile p50/p95 for Node
+and all three browsers over a size ladder. Every engine meets the §20.3 targets
+in the small/medium band, and the spread between engines is small — no engine is
+an outlier. The measurements are maintainer-run, not a CI gate: shared runners
+are too noisy to hold latency to a bound without flaky failures.
 
 ### 26.5 Emscripten compatibility settings
 

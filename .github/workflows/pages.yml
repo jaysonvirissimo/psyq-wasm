@@ -25,14 +25,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Shared with the packaging test, so the layout under test is the layout
+      # that ships.
       - name: Assemble the static site
-        run: |
-          mkdir -p site/dist
-          cp -r demo site/demo
-          cp dist/*.js dist/*.wasm dist/build-info.json site/dist/
-          cat > site/index.html <<'EOF'
-          <!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=demo/">
-          EOF
+        run: node scripts/assemble-site.mjs site
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

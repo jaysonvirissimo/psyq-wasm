@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 import { describe, expect, it, vi } from 'vitest';
-import type { Platform } from '../../src/create-compiler.js';
 import * as node from '../../src/index.node.js';
 import { BUILD_ID, fakeWorkerFactory } from '../helpers/fake-worker.js';
+
+const { createNodePlatform } = vi.hoisted(() => ({ createNodePlatform: vi.fn() }));
+vi.mock('../../src/platform-node.js', () => ({ createNodePlatform }));
 
 const EMPTY_MODULE = new WebAssembly.Module(
   new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]),
@@ -25,22 +27,26 @@ describe('index.node', () => {
     expect(node.DEFAULT_LIMITS.maxSourceBytes).toBeGreaterThan(0);
   });
 
-  it('createCompiler wires the platform through createCompilerWith', async () => {
+  it('createCompiler defaults to the node platform', async () => {
     const { spawn, workers } = fakeWorkerFactory();
-    const platform: Platform = {
+    createNodePlatform.mockReturnValue({
       baseUrl: new URL('file:///pkg/dist/index.node.js'),
-      defaultWorkerUrl: () => new URL('file:///pkg/dist/worker.node.js'),
       defaultWasmUrl: () => new URL('file:///pkg/dist/cc1psx.wasm'),
       defaultPreprocessorWasmUrl: () => new URL('file:///pkg/dist/cccp.wasm'),
       loadModule: () => Promise.resolve(EMPTY_MODULE),
       spawnWorker: spawn,
-    };
-    const pending = node.createCompiler(undefined, platform);
+    });
+
+    // No platform can be injected any more: the entry point must reach for its
+    // own host bindings. Anything else means the wrong worker would be spawned.
+    const pending = node.createCompiler();
     await vi.waitFor(() => {
       expect(workers[0]?.posted).toHaveLength(1);
     });
     workers[0]?.ready();
     const compiler = await pending;
+
+    expect(createNodePlatform).toHaveBeenCalledTimes(1);
     expect(compiler.info.buildId).toBe(BUILD_ID);
     compiler.dispose();
   });

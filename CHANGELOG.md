@@ -9,10 +9,59 @@ changes, because they can alter emitted assembly.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-07
+
+First stable release. The public API is now covered by semantic versioning, and
+that covers both layers: `compilePreprocessed()` and `compileSource()`. See the
+README's Stability section for exactly what is promised.
+
+### Fixed
+
+- **`createCompiler` was missing from the shipped type declarations.** The
+  `@internal` tag documenting the `platform` test seam applied to the whole
+  declaration rather than to the parameter, and `stripInternal` therefore
+  deleted `createCompiler` from `dist/index.d.ts` and `dist/index.node.d.ts`.
+  The runtime export was unaffected, so JavaScript consumers worked and no test
+  noticed; every TypeScript consumer would have failed to resolve the library's
+  primary entry point. The seam is gone from the public signature, and two new
+  guards cover it: an API-surface test that every runtime export is declared,
+  and a TypeScript consumer in the packaging matrix.
+
 ### Changed
 
+- `createCompiler()` no longer takes a second `platform` argument. It was an
+  undocumented test seam; `createCompilerWith()` remains the injection point the
+  tests use.
 - Require Node 22 or newer (`engines.node`). Node 20 reached end of life on
   2026-04-30.
+
+### Added
+
+- `docs/PERFORMANCE.md`: warm-compile p50/p95 for Node, Chromium, Firefox, and
+  WebKit across a size ladder, with `npm run bench` and `npm run bench:browser`
+  to reproduce them. Every runtime meets the design targets; the numbers are a
+  report, not a CI gate.
+- Packaging matrix completed: TypeScript (`tsc --noEmit` against the shipped
+  declarations), direct browser ESM with no bundler, and the demo served from a
+  project subpath as GitHub Pages serves it, alongside the existing Node and
+  Vite consumers.
+- `scripts/assemble-site.mjs`, shared by the Pages workflow and the packaging
+  test so the layout under test is the layout that ships.
+- A weekly `Reference drift` workflow regenerating `build/gen` and the fixtures
+  from the historical reference compiler. That check previously ran only on
+  tags, so drift surfaced mid-release.
+- The release gate now requires a `CHANGELOG.md` section for the version being
+  tagged.
+
+### Removed
+
+- An unreachable worker-URL fallback in `createCompilerWith()`. TypeScript
+  coverage is now 100% of statements, functions, and lines.
+
+### Security
+
+- npm publishing moved to trusted publishing (OIDC); no `NPM_TOKEN` secret is
+  stored in the repository.
 
 ## [0.2.0] - 2026-09-07
 
@@ -90,6 +139,7 @@ changes, because they can alter emitted assembly.
 - Initial artifact: homebrew-psyq `bdee891` (GCC 2.8.1 / PsyQ 4.4), Emscripten
   6.0.9, `-O2 -flto` objects with an `-O1` link.
 
-[Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.2.0...v1.0.0
 [0.2.0]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jaysonvirissimo/psyq-wasm/releases/tag/v0.1.0

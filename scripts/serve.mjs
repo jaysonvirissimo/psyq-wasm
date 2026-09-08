@@ -3,7 +3,10 @@
  * Minimal static file server for the demo and the browser tests. Serves the
  * repository root so pages can import from /dist and fetch /test/fixtures.
  *
- *   node scripts/serve.mjs [port]      default port 4173
+ *   node scripts/serve.mjs [port] [root]      default port 4173, repository root
+ *
+ * A root other than the repository is used by the packaging tests, which serve
+ * a consumer app (bare browser ESM) or an assembled Pages site under a subpath.
  *
  * Sets the `application/wasm` MIME type that streaming compilation requires,
  * disables caching, and never lists directories (index.html only).
@@ -13,7 +16,9 @@ import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const ROOT = resolve(
+  process.argv[3] ?? process.env.SERVE_ROOT ?? fileURLToPath(new URL('..', import.meta.url)),
+);
 const PORT = Number(process.argv[2] ?? process.env.PORT ?? '4173');
 
 const MIME = {
@@ -35,7 +40,7 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-/** Map a request path onto the repository, refusing anything outside it. */
+/** Map a request path onto the served root, refusing anything outside it. */
 function resolvePath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split('?')[0]);
   const full = normalize(join(ROOT, decoded));

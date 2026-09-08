@@ -48,10 +48,11 @@ jobs:
           scripts/pack-source-archive.sh "${GITHUB_REF_NAME#v}" build/out/release
           scripts/verify-source-archive.sh "build/out/release/psyq-wasm-${GITHUB_REF_NAME#v}-corresponding-source.tar.gz" dist/SHA256SUMS --twice
 
+      # Trusted publishing (OIDC): npm derives the credential from the job's
+      # id-token, so there is no long-lived NPM_TOKEN in repository secrets.
+      # Requires the trusted publisher to be configured on the npm package.
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: GitHub release
         uses: softprops/action-gh-release@v3

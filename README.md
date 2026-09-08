@@ -24,7 +24,7 @@ or score matches. It preprocesses and compiles.
 npm install psyq-wasm
 ```
 
-Node.js 20 or later on Linux, macOS, and Windows; current Chrome, Firefox, and Safari. No
+Node.js 22 or later on Linux, macOS, and Windows; current Chrome, Firefox, and Safari. No
 `SharedArrayBuffer`, threads, or cross-origin isolation required, so it works
 from plain static hosting.
 
@@ -198,6 +198,25 @@ interface CompileSourceOptions extends CompilePreprocessedOptions {
 A `CompileResult` from `compileSource()` also carries `preprocessed` (the bytes
 the compiler received), `timings.preprocessMs`, and, on failure, `stage`.
 `rawStderr` and `diagnostics` cover both programs.
+
+### Stability
+
+The public API is covered by semantic versioning as of 1.0. That covers both
+layers: `compilePreprocessed()`, the exact primitive, and `compileSource()`,
+the raw-source pipeline with virtual headers and EUC-JP. The preprocessing
+pipeline reproduces the reference `cccp` byte for byte across the whole fixture
+set in Node and in all three browsers, so it carries the same promise as the
+compiler itself.
+
+Also stable: the exported error classes and their `code` values, `DEFAULT_LIMITS`,
+`DEFAULT_CPP_FLAGS`, `parseDiagnostics()`, and `encodeEucJp()`.
+
+Two things are deliberately not stable. `CompilerInfo.buildId` and
+`preprocessorBuildId` are opaque strings; record them, do not parse them. And
+the compiler artifact itself may change to correct a mismatch against the
+reference compiler: such a change alters emitted assembly without altering the
+API, so it is a fidelity fix rather than a breaking API change and is listed
+separately in the changelog.
 
 ### Errors
 

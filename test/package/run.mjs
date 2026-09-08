@@ -12,12 +12,15 @@ import { execFileSync, spawn } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect, createServer } from 'node:net';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const HERE = join(ROOT, 'test', 'package');
 const OUT = join(HERE, 'out');
 const skipVite = process.argv.includes('--skip-vite');
+const rootPkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+const tsVersion = rootPkg.devDependencies.typescript;
+const typesNodeVersion = rootPkg.devDependencies['@types/node'];
 
 function step(name) {
   console.log(`\n==> ${name}`);
@@ -156,6 +159,30 @@ console.log(nodeOut.trim());
 assert(nodeOut.includes('NODE-SMOKE-OK'), 'node consumer compiled the fixture byte-exactly');
 
 // ---------------------------------------------------------------------------
+step('typescript consumer app');
+const tsApp = join(OUT, 'ts-app');
+cpSync(join(HERE, 'ts-app'), tsApp, { recursive: true });
+writeFileSync(
+  join(tsApp, 'package.json'),
+  JSON.stringify(
+    {
+      name: 'psyq-wasm-ts-smoke',
+      private: true,
+      type: 'module',
+      dependencies: { 'psyq-wasm': `file:${tarball}` },
+      devDependencies: { typescript: tsVersion, '@types/node': typesNodeVersion },
+    },
+    null,
+    2,
+  ),
+);
+run('npm', ['install', '--no-audit', '--no-fund', '--no-package-lock', '--ignore-scripts'], tsApp);
+// The JavaScript consumers above never look at a declaration file, so only this
+// step can catch a package that resolves at runtime but not for a TS user.
+run('npx', ['tsc', '--noEmit'], tsApp);
+assert(true, 'typescript consumer type-checks against the packed declarations');
+
+// ---------------------------------------------------------------------------
 if (skipVite) {
   console.log('\n(vite consumer app skipped)');
 } else {
@@ -234,6 +261,102 @@ if (skipVite) {
   } finally {
     preview.kill();
   }
+}
+
+// ---------------------------------------------------------------------------
+/** Serve `root` and drive the page at `path` with headless Chromium. */
+async function checkInBrowser(label, root, path, drive) {
+  const port = await freePort();
+  const server = spawn(process.execPath, [join(ROOT, 'scripts/serve.mjs'), String(port), root], {
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
+  try {
+    await waitForPort(port, server, 30_000);
+    const { chromium } = await import('@playwright/test');
+    const browser = await chromium.launch();
+    try {
+      const page = await browser.newPage();
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(String(e)));
+      await page.goto(`http://127.0.0.1:${String(port)}${path}`);
+      await drive(page);
+      assert(errors.length === 0, `${label}: no page errors (${errors.join('; ')})`);
+    } finally {
+      await browser.close();
+    }
+  } finally {
+    server.kill();
+  }
+}
+
+if (skipVite) {
+  console.log('\n(browser ESM and Pages consumers skipped)');
+} else {
+  const { createHash } = await import('node:crypto');
+  const expectedSha = createHash('sha256')
+    .update(readFileSync(join(ROOT, 'test/fixtures/expected/g8/t01_arith.s')))
+    .digest('hex');
+
+  // -------------------------------------------------------------------------
+  step('direct browser ESM consumer (no bundler)');
+  const esmApp = join(OUT, 'esm-app');
+  cpSync(join(HERE, 'esm-app'), esmApp, { recursive: true });
+  cpSync(join(ROOT, 'test/fixtures/src/t01_arith.i'), join(esmApp, 't01_arith.i'));
+  writeFileSync(
+    join(esmApp, 'package.json'),
+    JSON.stringify(
+      {
+        name: 'psyq-wasm-esm-smoke',
+        private: true,
+        type: 'module',
+        dependencies: { 'psyq-wasm': `file:${tarball}` },
+      },
+      null,
+      2,
+    ),
+  );
+  run(
+    'npm',
+    ['install', '--no-audit', '--no-fund', '--no-package-lock', '--ignore-scripts'],
+    esmApp,
+  );
+  await checkInBrowser('browser ESM', esmApp, '/', async (page) => {
+    await page.waitForFunction(() => window.result !== undefined, undefined, { timeout: 60_000 });
+    const result = await page.evaluate(() => window.result);
+    console.log(JSON.stringify(result));
+    assert(result.success === true, 'browser ESM: compile succeeded');
+    assert(result.sha256 === expectedSha, 'browser ESM: output is byte-exact');
+    assert(result.sourceSuccess === true, 'browser ESM: compileSource succeeded');
+    assert(result.sourceSha256 === expectedSha, 'browser ESM: compileSource output is byte-exact');
+  });
+
+  // -------------------------------------------------------------------------
+  step('GitHub Pages consumer (project subpath)');
+  // Pages serves a project site from /<repo>/, not from the domain root, so the
+  // site is assembled inside a subdirectory and served from its parent. Only a
+  // fully relative site survives that.
+  const pagesRoot = join(OUT, 'pages');
+  const { assembleSite } = await import(
+    pathToFileURL(join(ROOT, 'scripts/assemble-site.mjs')).href
+  );
+  assembleSite(join(pagesRoot, 'psyq-wasm'));
+  await checkInBrowser('GitHub Pages', pagesRoot, '/psyq-wasm/demo/', async (page) => {
+    // The compile button stays disabled until the compiler has loaded, so
+    // waiting for it to enable proves both .wasm assets resolved from the
+    // subpath.
+    await page.waitForSelector('#compile:not([disabled])', { timeout: 60_000 });
+    await page.click('#compile');
+    await page.waitForFunction(
+      () => /^ok \(\d+ bytes\)$/.test(document.getElementById('status')?.textContent ?? ''),
+      undefined,
+      { timeout: 60_000 },
+    );
+    const output = await page.evaluate(() => document.getElementById('output')?.textContent ?? '');
+    console.log(
+      `  demo status: ${await page.evaluate(() => document.getElementById('status')?.textContent)}`,
+    );
+    assert(output.includes('.text'), 'GitHub Pages: demo emitted assembly from a project subpath');
+  });
 }
 
 console.log('\nPACKAGE-SMOKE-OK');

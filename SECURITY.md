@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-psyq-wasm is pre-1.0. Only the latest published `0.x` release receives security
-fixes.
+Only the latest published release receives security fixes. Patches are issued
+against the current minor; there are no long-term-support branches.
 
 ## Reporting a vulnerability
 

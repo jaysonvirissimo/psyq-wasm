@@ -28,7 +28,7 @@ npm run serve          # http://127.0.0.1:4173/demo/
 Unit tests never need the compiler artifact. The Node and browser suites do,
 and they fail (never skip) when `dist/` is missing.
 
-Development tooling runs on Node 24, TypeScript 6.0, and Vitest 4.1. Keep the
+Development tooling runs on Node 24, TypeScript 6.0, and Vitest 5. Keep the
 `.npmrc` legacy-peer workaround for local npm 11 installs; `npm ci` is the
 standard clean-install path. Compiler builds use Docker exclusively, with
 Emscripten 6.0.9 pinned by digest and `linux/amd64` selected on every host.
@@ -40,13 +40,24 @@ exercise native file URL handling.
 
 ## Test layers
 
-| Layer        | Location       | Runs where   | Needs                       |
-| ------------ | -------------- | ------------ | --------------------------- |
-| Unit         | `test/unit`    | Vitest, Node | nothing                     |
-| Build inputs | `test/build`   | Vitest, Node | nothing (vendor optional)   |
-| Node + diff  | `test/node`    | Vitest, Node | `dist/` (built)             |
-| Browser      | `test/browser` | Playwright   | `dist/`, browsers installed |
-| Package      | `test/package` | Node script  | `dist/`, network            |
+| Layer        | Location                                          | Runs where       | Needs                       |
+| ------------ | ------------------------------------------------- | ---------------- | --------------------------- |
+| Unit         | `test/unit`                                       | Vitest, Node     | nothing                     |
+| Build inputs | `test/build`                                      | Vitest, Node     | nothing (vendor optional)   |
+| Node + diff  | `test/node`                                       | Vitest, Node     | `dist/` (built)             |
+| Browser      | `test/browser`                                    | Playwright       | `dist/`, browsers installed |
+| Package      | `test/package`                                    | Node script      | `dist/`, network            |
+| Benchmark    | `scripts/bench.mjs`, `test/browser/bench.perf.ts` | Node, Playwright | `dist/`                     |
+
+`npm run test:package` packs the library and exercises five consumers: Node,
+TypeScript (`tsc --noEmit` against the shipped declarations), Vite, bare browser
+ESM with an import map and no bundler, and the demo site served from a project
+subpath the way GitHub Pages serves it. The TypeScript consumer is the only one
+that reads a declaration file; without it a package can resolve at runtime and
+still be unusable from TypeScript.
+
+`npm run bench` and `npm run bench:browser` produce the measurements behind
+`docs/PERFORMANCE.md`. They assert nothing about latency and do not run in CI.
 
 The differential suite (`test/node/differential.test.ts`) compiles every entry
 of `test/fixtures/manifest.json` and requires byte-identical assembly and
@@ -142,6 +153,13 @@ export. After extraction, run `build/build-wasm.sh --offline-source` inside its
 `psyq-wasm/` directory. The command verifies bundled checksums and pins and
 does not need Git or npm; Docker may download its pinned image if not cached.
 
-Publishing requires `NPM_TOKEN` or configured npm trusted publishing. The demo
-workflow requires GitHub Pages to be enabled. These are repository/account
-settings, not prerequisites for local validation.
+Publishing uses npm trusted publishing (OIDC): the release job mints its
+credential from its own `id-token`, so no `NPM_TOKEN` secret is stored. The
+trusted publisher must be configured on the npm package before the first
+release. The demo workflow requires GitHub Pages to be enabled. These are
+repository/account settings, not prerequisites for local validation.
+
+`build/gen` and the fixtures are regenerated from the historical reference
+compiler, which is too slow to rebuild on every pull request. The
+`Reference drift` workflow does it weekly, and can be run on demand from the
+Actions tab; the release job repeats it before publishing.
