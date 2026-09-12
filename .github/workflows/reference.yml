@@ -26,6 +26,7 @@ jobs:
 
       - name: Fresh reference regeneration and fixture verification
         run: |
+          mkdir -p build/out
           reference=$(mktemp -d "$PWD/build/out/reference-scheduled.XXXXXX")
           build/build-reference.sh "$reference"
           build/check-gen.sh "$reference"
