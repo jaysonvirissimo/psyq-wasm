@@ -1,0 +1,33 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[Makefile]
+indent_style = tab
+
+# Byte-exact fixtures and generated compiler sources: leave untouched.
+[test/fixtures/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+[build/gen/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset
+
+[build/patches/**]
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

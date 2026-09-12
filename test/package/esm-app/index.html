@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>psyq-wasm direct ESM consumer</title>
+<!--
+  No bundler and no build step: an import map points a bare specifier straight
+  at the installed package, the way a plain static page consumes it. The worker
+  and both .wasm assets must then resolve from inside node_modules through
+  import.meta.url with no help from us.
+-->
+<script type="importmap">
+  { "imports": { "psyq-wasm": "/node_modules/psyq-wasm/dist/index.js" } }
+</script>
+<pre id="out">compiling…</pre>
+<script type="module" src="./main.js"></script>

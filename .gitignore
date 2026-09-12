@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+test/package/*/node_modules/
+
+# Build output
+dist/
+test/package/*/dist/
+build/vendor/
+build/out/
+*.tgz
+
+# Test output
+coverage/
+test/package/out/
+playwright-report/
+test-results/
+blob-report/
+.eslintcache
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.claude/
