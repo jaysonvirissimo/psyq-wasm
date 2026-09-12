@@ -44,8 +44,12 @@ mkdir -p "$GENERATED/src" "$GENERATED/expected/pp" "$GENERATED/order"
 cp "$FIXTURES/src/"*.c "$FIXTURES/src/"*.h "$GENERATED/src/"
 cp -R "$FIXTURES/include" "$GENERATED/include"
 
+# Run as the host user: on Linux, files the container writes to /generated are
+# otherwise root-owned, and the host can neither transcode them in place nor
+# clean up $GENERATED. (Docker Desktop hides this by remapping ownership.)
 run_in_slink() {
   docker run --rm -i \
+    --user "$(id -u):$(id -g)" \
     --platform "$SLINK_PLATFORM" \
     --tmpfs /work:exec,size=512m \
     -v "$RESULT_DIR:/ref:ro" \
