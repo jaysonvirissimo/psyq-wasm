@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, verify, publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub release
+      id-token: write # npm provenance (trusted publishing)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+
+      - run: npm run build:wasm
+
+      - name: Fresh reference regeneration and fixture verification
+        run: |
+          reference=$(mktemp -d "$PWD/build/out/reference-release.XXXXXX")
+          build/build-reference.sh "$reference"
+          build/check-gen.sh "$reference"
+          build/compile-fixtures.sh --verify "$reference"
+
+      - run: npm run build:ts
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run test:node
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npm run test:browser
+      - run: npm run test:package
+      - run: node scripts/verify-provenance.mjs --tag "${GITHUB_REF_NAME}"
+
+      - name: Corresponding source archive
+        run: |
+          scripts/pack-source-archive.sh "${GITHUB_REF_NAME#v}" build/out/release
+          scripts/verify-source-archive.sh "build/out/release/psyq-wasm-${GITHUB_REF_NAME#v}-corresponding-source.tar.gz" dist/SHA256SUMS --twice
+
+      # The GitHub release carries the GPL corresponding-source archive, so it
+      # goes out before npm: a failure here leaves nothing published, whereas an
+      # npm version cannot be withdrawn once the binaries are public. A missing
+      # file fails the step instead of producing a release without the source.
+      - name: GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            dist/cc1psx.wasm
+            dist/cc1psx.js
+            dist/cccp.wasm
+            dist/cccp.js
+            dist/build-info.json
+            dist/SHA256SUMS
+            build/out/release/*.tar.gz
+            build/out/release/*.sha256
+            PROVENANCE.md
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+      # Trusted publishing (OIDC): npm derives the credential from the job's
+      # id-token, so there is no long-lived NPM_TOKEN in repository secrets.
+      # Requires the trusted publisher to be configured on the npm package, and
+      # npm 11.5.1 or newer. Upgraded here rather than before `npm ci`, so the
+      # build and tests run on the same bundled npm as CI.
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@11
+          npm --version
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public

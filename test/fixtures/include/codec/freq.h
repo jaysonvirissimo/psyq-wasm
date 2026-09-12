@@ -1,0 +1,5 @@
+#ifndef CODEC_FREQ_H
+#define CODEC_FREQ_H
+#define CODEC_MEILING 14012
+#define CODEC_NASTASHA 14115
+#endif

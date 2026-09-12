@@ -1,0 +1,2 @@
+t09_sign.c: In function `char_is_neg':
+t09_sign.c:7: warning: comparison is always 0 due to limited range of data type

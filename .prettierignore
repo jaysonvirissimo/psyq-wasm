@@ -1,0 +1,16 @@
+dist/
+coverage/
+build/gen/
+build/vendor/
+build/out/
+build/patches/
+test/fixtures/
+test/package/*/dist/
+test/package/*/node_modules/
+test/package/out/
+playwright-report/
+test-results/
+package-lock.json
+CHANGELOG.md
+docs/
+src/eucjp-table.ts

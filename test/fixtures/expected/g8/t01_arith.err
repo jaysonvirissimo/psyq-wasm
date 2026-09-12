@@ -1,0 +1,2 @@
+t01_arith.c: In function `neg_and':
+t01_arith.c:3: warning: suggest parentheses around arithmetic in operand of |

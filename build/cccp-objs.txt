@@ -1,0 +1,5 @@
+cccp.o
+cexp.o
+prefix.o
+version.o
+obstack.o
