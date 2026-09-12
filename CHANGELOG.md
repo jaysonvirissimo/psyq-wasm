@@ -9,7 +9,7 @@ changes, because they can alter emitted assembly.
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-09-07
+## [1.0.0] - 2026-09-12
 
 First stable release. The public API is now covered by semantic versioning, and
 that covers both layers: `compilePreprocessed()` and `compileSource()`. See the
@@ -69,7 +69,10 @@ README's Stability section for exactly what is promised.
 - npm publishing moved to trusted publishing (OIDC); no `NPM_TOKEN` secret is
   stored in the repository.
 
-## [0.2.0] - 2026-09-07
+## 0.2.0 - 2026-09-07
+
+0.2.0 and 0.1.0 were development milestones. They were never tagged or
+published; their changes first shipped in 1.0.0.
 
 ### Added
 
@@ -122,7 +125,7 @@ README's Stability section for exactly what is promised.
 - Add cancellation, buffer ownership, failure propagation, timer, and archive verification regressions.
 - Exercise Node 20/22/24 on Linux and Node 24 on macOS/Windows, including packed-package consumers.
 
-## [0.1.0] - 2026-09-07
+## 0.1.0 - 2026-09-07
 
 ### Added
 
@@ -146,6 +149,4 @@ README's Stability section for exactly what is promised.
   6.0.9, `-O2 -flto` objects with an `-O1` link.
 
 [Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.2.0...v1.0.0
-[0.2.0]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/jaysonvirissimo/psyq-wasm/releases/tag/v0.1.0
+[1.0.0]: https://github.com/jaysonvirissimo/psyq-wasm/releases/tag/v1.0.0
