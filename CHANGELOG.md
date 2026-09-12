@@ -148,5 +148,5 @@ published; their changes first shipped in 1.0.0.
 - Initial artifact: homebrew-psyq `bdee891` (GCC 2.8.1 / PsyQ 4.4), Emscripten
   6.0.9, `-O2 -flto` objects with an `-O1` link.
 
-[Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/jaysonvirissimo/psyq-wasm/commits/main
 [1.0.0]: https://github.com/jaysonvirissimo/psyq-wasm/releases/tag/v1.0.0
